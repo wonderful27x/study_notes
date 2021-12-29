@@ -1,0 +1,63 @@
+@startuml
+
+title Janus Client source UML
+participant "plugin video-room" as pvr order 1
+participant PluginHandle as ph order 2
+participant "Janus" as js order 3
+participant "server" as sv order 4
+
+'定义n为换行
+!$n = "\r\n"
+'定义tab为九个空格
+!$tab = "         "
+'定义ntb为换行+九个空格，用于格式化json
+!$ntb = "\n         "
+'定义nttb为换行+18个空格，用于格式化json
+!$nttb = "\n                  "
+'定义ntttb为换行+27个空格，用于格式化json
+!$ntttb = "\n                           "
+'定义nttttb为换行+36个空格，用于格式化json
+!$nttttb = "\n                                    "
+
+pvr -> js : 1:document.ready()\n{Janus.init(callback)}
+js --> pvr : 2:callback
+pvr -> js : 4:start click()\n{janus = new Janus(callbacks)}
+js -> sv : 5:createSession(callback)\n{requst create}
+sv --> js : 6:succes,sessionId\nhandleEvent()
+js --> pvr : 7:callback.success()
+pvr -> js : 8:janus.attach(callbacks)
+note left : 作为发布者绑定插件
+js -> sv : 9:createHandle(callback)\n{request attach}
+sv --> js : 10:success,handleId\nhandleEvent()
+js --> ph : 11:create pluginHandle
+ph --> pvr : 12:callback.success(pluginHandle)\n持有pluginHandle引用
+pvr -> ph : 13:register click()\n{send(request join)}
+ph -> js : 14:sendMessage(request join)
+js -> sv : 15:request joijn
+sv --> js : 16:event,joind\nhandleEvent()
+js --> ph : 17:onmessage(joined)
+ph --> pvr : 18:onmessage(joined)
+pvr -> ph : 19:publishOwnFeed()\n{createOffer(callback)}
+ph -> js : 20:prepareWebrtc(callback)
+js ->o js : 21:streamsDone(callback)
+js -> ph : 22:onlocalstream(stream)
+ph -> pvr : 23:onlocalstream(stream)
+pvr -> js : 24:Janus.attachMediaStream,显示本地流
+js --> sv : 25:pluginHandle.webrtcStuff\n.pc.onicecandidate()\n{sendTrickleCandidate()}
+js ->o js : 27:createOffer()\n{setLocalDescription()}
+js --> pvr : 28:callback.success(sdp)
+pvr -> ph : 29:send(sdp)
+ph -> js : 30:sendMessage(sdp)
+js -> sv : 31:offer sdp
+sv --> js : 32:event,answer sdp\nhandleEvent()
+js --> ph : 33:onmessage(jsep)
+ph --> pvr : 34:onmessage(jsep)
+pvr -> ph : 35:handleRemoteJsep(jsep)
+ph -> js : 36:prepareWebrtcPeer()\n{setRemoteDescription()}
+sv --> js : 37:trickle,candidate\nhandleEvent()
+js --> ph : 38:webrtcStuff.pc.addIceCandidate()
+
+pvr -> js : janus.attach(callback)
+note left : 订阅者，和发布者的流程几乎一样，差异主要有：\n 1.join成功后返回订阅对象的sdp offer,这时调用的是\n pluginHandle.createAnswer() -> prepareWebrtc()\n 2.streamsDone()中会调用setRemoteDescription()\n并调用createAnswer()产生sdp,然后setLocalDescription(),\n最后将sdp answer发送到server\n 3.streamsDone中设置的ontrack()被回调，然后将获取的远端流显示出来
+
+@enduml

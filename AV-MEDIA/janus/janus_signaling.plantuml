@@ -1,0 +1,172 @@
+@startuml
+
+title Janus Signaling UML
+participant "Client A" as PA order 1
+participant Gateway order 2
+participant "Client B" as PB order 3
+
+'定义n为换行
+!$n = "\r\n"
+'定义tab为九个空格
+!$tab = "         "
+'定义ntb为换行+九个空格，用于格式化json
+!$ntb = "\n         "
+'定义nttb为换行+18个空格，用于格式化json
+!$nttb = "\n                  "
+'定义ntttb为换行+27个空格，用于格式化json
+!$ntttb = "\n                           "
+'定义nttttb为换行+36个空格，用于格式化json
+!$nttttb = "\n                                    "
+
+'PA 加入房间流程，这时房间还没有人,PA只需发布流
+PA -> Gateway : 1:请求创建session
+note left : {$ntb"janus":"create",$ntb"transaction":"xquco8PifpXy"$n} 
+Gateway -> Gateway : 2:create session
+Gateway --> PA : 3:返回session ID
+note right : {$ntb"janus":"success",$ntb"transaction":"xquco8PifpXy",$ntb"data":{$nttb"id":6625688931244104 $ntb}$n}
+
+PA -> Gateway : 4:绑定插件
+note left : {$ntb"janus":"attach",$ntb"plugin":"janus.plugin.videoroom",$ntb"opaque_id":"videoroomtest-JPkbv1yyPQUR",$ntb"transaction":"JUQN8RGGqI8x",$ntb"session_id":6625688931244104 $n}
+Gateway --> PA : 5:返回handle ID
+note right : {$ntb"janus":"success",$ntb"session_id":6625688931244104,$ntb"transaction":"JUQN8RGGqI8x",$ntb"data":{$nttb"id":824373231876398 $ntb}$n}
+
+PA -> Gateway : 6:以发布者加入房间
+note left : {$ntb"janus":"message",$ntb"body":{$nttb"request":"join",$nttb"room":1234,$nttb"ptype":"publisher",$nttb"display":"111"$ntb},$ntb"transaction":"M9udNzObUT6U",$ntb"session_id":6625688931244104,$ntb"handle_id":824373231876398 $n}
+Gateway --> PA : 7:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"M9udNzObUT6U"}
+Gateway -> Gateway : 8:处理message
+Gateway --> PA : 9: join 成功
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"transaction":"M9udNzObUT6U",$ntb"sender":824373231876398,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"joined",$ntttb"room":1234,$ntttb"description":"Demo Room",$ntttb"id":8854919062182404,$ntttb"private_id":3411107909,$ntttb"publishers":[]$nttb}$ntb}$n}
+
+PA -> Gateway : 10:发布流并offer sdp
+note left : {$ntb"janus":"message",$ntb"body":{$nttb"request":"configure",$nttb"audio":true,$nttb"video":true $ntb},$ntb"transaction":"xTTmkSOBwmXs",$ntb"jsep":{$nttb"type":"offer","sdp":"..."$ntb},$ntb"session_id":6625688931244104,$ntb"handle_id":824373231876398 $n}
+Gateway --> PA : 11:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"xTTmkSOBwmXs"}
+Gateway -> Gateway : 12:处理消息
+PA -> Gateway : 13-1:发送candidate,(会发送多次)
+note left : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"candidate":"candidate:...",$nttb"sdpMid":"0",$nttb"sdpMLineIndex":0 $ntb},$ntb"transaction":"9N51AkX0Fpfs",$ntb"session_id":6625688931244104,$ntb"handle_id":824373231876398 $n}
+Gateway --> PA : 13-2:响应ack,(会响应多次)
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"9N51AkX0Fpfs"}
+Gateway --> PA : 14：发布成功，answer sdp
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"transaction":"xTTmkSOBwmXs",$ntb"sender":824373231876398,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"configured":"ok",$ntttb"audio_codec":"opus",$ntttb"video_codec":"vp8"$nttb}$ntb},$ntb"jsep":{$nttb"type":"answer","sdp":"..."$ntb}$n}
+PA -> Gateway : 15:candidate结束,\n13-15之间还有很多candidate的发送省略了
+note left : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"completed":true $ntb},$ntb"transaction":"V8rqwgX9VF83",$ntb"session_id":6625688931244104,$ntb"handle_id":824373231876398 $n}
+Gateway --> PA : 16:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"V8rqwgX9VF83"}
+
+'PB 加入房间流程，这时PA已经在房间里,PB既需要发布流又需要订阅流
+PB -> Gateway : 17:请求创建 session
+note right : {$ntb"janus":"create",$ntb"transaction":"zsihS3J2UjLZ"$n}
+Gateway -> Gateway : 18:create session
+Gateway --> PB : 19:返回session ID
+note left : {$ntb"janus":"success",$ntb"transaction":"zsihS3J2UjLZ",$ntb"data":{$nttb"id":2480427901265901 $ntb}$n}
+
+PB -> Gateway : 20:绑定插件(发布)
+note right : {$ntb"janus":"attach",$ntb"plugin":"janus.plugin.videoroom",$ntb"opaque_id":"videoroomtest-y2hITJHXKJRO",$ntb"transaction":"OVpwSGvZVbDP",$ntb"session_id":2480427901265901 $n}
+Gateway --> PB : 21:返回handle ID
+note left : {$ntb"janus":"success",$ntb"session_id":2480427901265901,$ntb"transaction":"OVpwSGvZVbDP",$ntb"data":{$nttb"id":4404724676868865 $ntb}$n}
+
+PB -> Gateway : 22:以发布者将加入房间
+note right : {$ntb"janus":"message",$ntb"body":{$nttb"request":"join",$nttb"room":1234,$nttb"ptype":"publisher",$nttb"display":"222"$ntb},$ntb"transaction":"pUqLVDSTIpQw",$ntb"session_id":2480427901265901,$ntb"handle_id":4404724676868865 $n}
+Gateway --> PB : 23:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"pUqLVDSTIpQw"}
+Gateway -> Gateway : 24:处理消息
+Gateway --> PB : 25: join成功
+note left : {$ntb"janus":"event",$ntb"session_id":2480427901265901,$ntb"transaction":"pUqLVDSTIpQw",$ntb"sender":4404724676868865,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"joined",$ntttb"room":1234,$ntttb"description":"Demo Room",$ntttb"id":3078106228597803,$ntttb"private_id":1170429074,$ntttb"publishers":[{$nttttb"id":8854919062182404,$nttttb"display":"111",$nttttb"audio_codec":"opus",$nttttb"video_codec":"vp8",$nttttb"talking":false $ntttb}]$nttb}$ntb}$n}
+
+PB -> Gateway : 26:绑定插件(订阅)
+note right : {$ntb"janus":"attach",$ntb"plugin":"janus.plugin.videoroom",$ntb"opaque_id":"videoroomtest-y2hITJHXKJRO",$ntb"transaction":"czDVrmAFNxEn",$ntb"session_id":2480427901265901 $n}
+Gateway --> PB : 27:返回handle ID
+note left : {$ntb"janus":"success",$ntb"session_id":2480427901265901,$ntb"transaction":"czDVrmAFNxEn",$ntb"data":{$nttb"id":4373710823681024 $ntb}$n}
+
+PB -> Gateway : 28:以订阅者加入房间
+note right : {$ntb"janus":"message",$ntb"body":{$nttb"request":"join",$nttb"room":1234,$nttb"ptype":"subscriber",$nttb"feed":8854919062182404,$nttb"private_id":1170429074 $ntb},$ntb"transaction":"g2LA3wcreBG0",$ntb"session_id":2480427901265901,$ntb"handle_id":4373710823681024 $n}
+Gateway --> PB : 29:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"g2LA3wcreBG0"}
+Gateway -> Gateway : 30:处理message
+
+PB -> Gateway : 31:发布流并offer sdp
+note right : {$ntb"janus":"message",$ntb"body":{$nttb"request":"configure",$nttb"audio":true,$nttb"video":true $ntb},$ntb"transaction":"MmHbTRZA9Jl4",$ntb"jsep":{$nttb"type":"offer","sdp":"..."$ntb},$ntb"session_id ":2480427901265901,$ntb"handle_id ":4404724676868865 $n}
+PB -> Gateway : 32:发布者发送candidate
+note right : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"candidate":"candidate:...",$nttb"sdpMid":"0",$nttb"sdpMLineIndex":0 $ntb},$ntb"transaction":"265QGtchXJjY",$ntb"session_id":2480427901265901,$ntb"handle_id":4404724676868865 $n}
+Gateway --> PB : 33:响应ack(candidate)
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"265QGtchXJjY"}
+Gateway --> PB : 34:响应ack(offer)
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"MmHbTRZA9Jl4"} 
+
+Gateway --> PB : 35:订阅者join成功，offer sdp
+note left : {$ntb"janus":"event",$ntb"session_id":2480427901265901,$ntb"transaction":"g2LA3wcreBG0",$ntb"sender":4373710823681024,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"attached",$ntttb"room":1234,$ntttb"id":8854919062182404,$ntttb"display":"111"$nttb}$ntb},$ntb"jsep":{$nttb"type":"offer","sdp":"..."$ntb}$n}
+Gateway --> PB : 36:发布成功，answer sdp
+note left : {$ntb"janus":"event",$ntb"session_id":2480427901265901,$ntb"transaction":"MmHbTRZA9Jl4",$ntb"sender":4404724676868865,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"configured":"ok",$ntttb"audio_codec":"opus",$ntttb"video_codec":"vp8"$nttb}$ntb},$ntb"jsep":{$nttb"type":"answer","sdp":"..."$ntb}$n}
+
+PB -> Gateway : 37:开始订阅,answer sdp
+note right : {$ntb"janus":"message",$ntb"body":{$nttb"request":"start",$nttb"room":1234 $ntb},$ntb"transaction":"XI7lktMmu3ni",$ntb"jsep":{$nttb"type":"answer","sdp":"..."$ntb},$ntb"session_id":2480427901265901,$ntb"handle_id":4373710823681024 $n}
+Gateway --> PB : 38:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"XI7lktMmu3ni"}
+Gateway --> PB : 39:订阅成功
+note left : {$ntb"janus":"event",$ntb"session_id":2480427901265901,$ntb"transaction":"XI7lktMmu3ni",$ntb"sender":4373710823681024,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"started":"ok"$nttb}$ntb}$n}
+PB -> Gateway : 40:订阅者发送candidate
+note right : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"candidate":"candidate:...",$nttb"sdpMid":"audio",$nttb"sdpMLineIndex":0 $ntb},$ntb"transaction":"qEHTwRt5uhzG",$ntb"session_id":2480427901265901,$ntb"handle_id":4373710823681024 $n}
+Gateway --> PB : 41:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"qEHTwRt5uhzG"}
+
+PB -> Gateway : 42:发布者candidate 结束
+note right : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"completed":true $ntb},$ntb"transaction":"T9e22m0sDTJF",$ntb"session_id":2480427901265901,$ntb"handle_id":4404724676868865 $n}
+Gateway --> PB : 43:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"T9e22m0sDTJF"}
+PB -> Gateway : 44:订阅者candidate 结束
+note right : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"completed":true $ntb},$ntb"transaction":"GWSHHEGqDLof",$ntb"session_id":2480427901265901,$ntb"handle_id":4373710823681024 $n}
+Gateway --> PB : 45:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"GWSHHEGqDLof"}
+
+'PB发布流后PA端开始订阅
+Gateway -> PA : 46:广播通知PA有人发布流
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"sender":824373231876398,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"publishers":[{$nttttb"id":3078106228597803,$nttttb"display":"222",$nttttb"audio_codec":"opus",$nttttb"video_codec":"vp8",$nttttb"talking":false $ntttb}]$nttb}$ntb}$n}
+PA -> Gateway : 47:绑定插件(订阅)
+note left : {$ntb"janus":"attach",$ntb"plugin":$ntb"janus.plugin.videoroom",$ntb"opaque_id":"videoroomtest-JPkbv1yyPQUR",$ntb"transaction":"M2rwmSrxvzWn",$ntb"session_id":6625688931244104 $n}
+Gateway --> PA : 48:返回handle ID
+note right : {$ntb"janus":"success",$ntb"session_id":6625688931244104,$ntb"transaction":"M2rwmSrxvzWn",$ntb"data":{$nttb"id":7963264770445835 $ntb}$n}
+
+PA -> Gateway : 49:以订阅者加入房间
+note left : {$ntb"janus":"message",$ntb"body":{$nttb"request":"join",$nttb"room":1234,$nttb"ptype":"subscriber",$nttb"feed":3078106228597803,$nttb"private_id":3411107909 $ntb},$ntb"transaction":"HDfTm54ELWCa",$ntb"session_id":6625688931244104,$ntb"handle_id":7963264770445835 $n}
+Gateway --> PA : 50:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"HDfTm54ELWCa"}
+Gateway --> PA : 51:订阅者join成功，offer sdp
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"transaction":"HDfTm54ELWCa",$ntb"sender":7963264770445835,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"attached",$ntttb"room":1234,$ntttb"id":3078106228597803,$ntttb"display":"222"$nttb}$ntb},$ntb"jsep":{$nttb"type":"offer","sdp":"..."$ntb}$n}
+PA -> Gateway : 52:开始订阅,并answer sdp
+note left : {$ntb"janus":"message",$ntb"body":{$nttb"request":"start",$nttb"room":1234 $ntb},$ntb"transaction":"8XQ3BDlQqQVa",$ntb"jsep":{$nttb"type":"answer","sdp":"..."$ntb},$ntb"session_id":6625688931244104,$ntb"handle_id":7963264770445835 $n}
+Gateway --> PA : 53:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"8XQ3BDlQqQVa"}
+Gateway --> PA : 54：订阅成功
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"transaction":"8XQ3BDlQqQVa",$ntb"sender":7963264770445835,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"started":"ok"$nttb}$ntb}$n}
+
+PA -> Gateway : 55:发送candidate
+note left : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"candidate":"candidate:...",$nttb"sdpMid":"audio",$nttb"sdpMLineIndex":0 $ntb},$ntb"transaction":"4aWxXAIz6uAg",$ntb"session_id":6625688931244104,$ntb"handle_id":7963264770445835 $n}
+Gateway --> PA : 56:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"4aWxXAIz6uAg"}
+PA -> Gateway : 57:candidate结束
+note left : {$ntb"janus":"trickle",$ntb"candidate":{$nttb"completed":true $ntb},$ntb"transaction":"huRNGzDx0Ynq",$ntb"session_id":6625688931244104,$ntb"handle_id":7963264770445835 $n}
+Gateway --> PA : 58:响应ack
+note right : {"janus":"ack","session_id":6625688931244104,"transaction":"huRNGzDx0Ynq"}
+
+'PB停止发布流并退出
+PB -> Gateway : 59:停止发布流
+note right : {$ntb"janus":"message",$ntb"body":{$nttb"request":"unpublish"$ntb},$ntb"transaction":"aVh8pPREYiU6",$ntb"session_id":2480427901265901,$ntb"handle_id":4404724676868865 $n}
+Gateway --> PB : 60:响应ack
+note left : {"janus":"ack","session_id":2480427901265901,"transaction":"aVh8pPREYiU6"}
+Gateway -> PA : 61:广播通知PA有人停止发布流
+note right : {$ntb"janus":"event",$ntb"session_id":6625688931244104,$ntb"sender":824373231876398,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"unpublished":3078106228597803 $nttb}$ntb}$n}
+Gateway --> PB : 62:停止发布ok
+note left : {$ntb"janus":"event",$ntb"session_id":2480427901265901,$ntb"transaction":"aVh8pPREYiU6",$ntb"sender":4404724676868865,$ntb"plugindata":{$nttb"plugin":"janus.plugin.videoroom",$nttb"data":{$ntttb"videoroom":"event",$ntttb"room":1234,$ntttb"unpublished":"ok"$nttb}$ntb}$n}
+
+PA -> Gateway : 63:PA订阅者断开连接 
+note left : {$ntb"janus":"detach",$ntb"transaction":"F1sep8Lu0K9m",$ntb"session_id":6625688931244104,$ntb"handle_id":7963264770445835 $n}
+Gateway --> PA : 64:断开成功
+note right : {$ntb"janus":"success",$ntb"session_id":6625688931244104,$ntb"transaction":"F1sep8Lu0K9m"$n}
+
+PB -> Gateway : 65:PB退出,销毁session
+note right : {$ntb"janus":"destroy",$ntb"transaction":"uQJVtjCezNGB",$ntb"session_id":2480427901265901 $n} 
+Gateway --> PB : 66:PB销毁成功
+note left : {$ntb"janus":"success",$ntb"session_id":2480427901265901,$ntb"transaction":"uQJVtjCezNGB"$n}
+
+@enduml

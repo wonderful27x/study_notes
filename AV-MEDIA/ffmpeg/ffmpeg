@@ -1,0 +1,190 @@
+FFMPEG - FFMPEG 框架
+
+int main()
+    //设置log相关
+    av_log_set_flags(AV_LOG_SKIP_REPEATED);
+    parse_loglevel(argc, argv, options);
+    //注册codecs和初始化网络
+    avdevice_register_all();
+    avformat_network_init();
+    //解析命令行参数,并根据命令参数初始化
+    ffmpeg_parse_options(argc, argv);
+    //转码主流程
+    transcode()
+        //初始化打开输出输入流编解码器，写入输出文件header
+        transcode_init();
+        //键盘指令相关
+        check_keyboard_interaction
+        //具体转码工作
+        transcode_step();
+        //打印报告信息，如转码时长等
+        print_report(0, timer_start, cur_time);
+        //冲刷编码器
+        flush_encoders();
+        //输出文件写尾
+        av_write_trailer(os))
+        关闭输出文件
+        avio_closep(&os->pb)
+        //关闭编码器和解码器
+        avcodec_close
+        
+//解析命令行参数,并根据命令参数初始化
+int ffmpeg_parse_options(int argc, char **argv)
+    //将命令行参数分割然后存储到OptionParseContext中，如-vcodec h264,key是vcodec,value是h264
+    //值的注意的是这时仅仅是将参数进行分组存储而以，还没有进行解析
+    ret = split_commandline(&octx, argc, argv, options, groups,FF_ARRAY_ELEMS(groups));
+    //解析global参数
+    ret = parse_optgroup(NULL, &octx.global_opts);
+    //打开输入文件,此函数里面会一层层的解析group中的参数然后保存到OptionContext上下文中
+    //最后将此上下文传递到函数指针open_input_file中进行调用
+    ret = open_files(&octx.groups[GROUP_INFILE], "input", open_input_file);
+    //创建filter
+    ret = init_complex_filters();
+    //打开输出文件
+    ret = open_files(&octx.groups[GROUP_OUTFILE], "output", open_output_file);
+    
+//根据参数上下文中的参数，打开输入文件
+//注意OptionsContext上下文保存了命令行设置的参数，所以o->xxx几乎都是在处理这些参数，但是这些参数不一定都设置了
+//如果没有设置一般都是用默认的
+static int open_input_file(OptionsContext *o, const char *filename)
+    //创建解复用上下文
+    ic = avformat_alloc_context();
+    //如果真正的指定了解码器，则查找解码器，并设置给解复用上下文
+    find_codec_or_die
+    	if avcodec_find_encoder_by_name
+    	if avcodec_find_decoder
+    //打开输入文件
+    avformat_open_input
+    avformat_find_stream_info(ic, opts);
+    //添加流
+    add_input_streams(o, ic);
+    	//创建解码器上下文
+        ist->dec_ctx = avcodec_alloc_context3(ist->dec);
+        //将流中的参数拷贝的解码器上下文
+        ret = avcodec_parameters_to_context(ist->dec_ctx, par);
+        
+//根据参数上下文中的参数，打开输出文件
+//OpentionsContext保存命令行参数
+static int open_output_file(OptionsContext *o, const char *filename)
+    //创将输出format上下文,o->format 即-f选项
+    err = avformat_alloc_output_context2(&oc, NULL, o->format, filename);
+    //创建一个视频输出流,idx是输入流的索引
+    new_video_stream(o, oc, idx);
+    	//创建出一个OutputStream
+    	ost = new_output_stream(o, oc, AVMEDIA_TYPE_VIDEO, source_index);
+    		//创建编码器上下文
+    		ost->enc_ctx = avcodec_alloc_context3(ost->enc);
+    		//创建编码参数
+    		ost->ref_par = avcodec_parameters_alloc();
+    //创建一个音频输出流，idx是输入流索引
+    new_audio_stream(o, oc, idx);
+    		//创建输出流
+    		avformat_new_stream
+        	//创建编码器上下文
+    		ost->enc_ctx = avcodec_alloc_context3(ost->enc);
+    		//创建编码参数
+    		ost->ref_par = avcodec_parameters_alloc();
+    //是否需要解码
+    ist->decoding_needed |= DECODING_FOR_OST;
+        
+//初始化打开输出输入流编解码器，写入输出文件header
+static int transcode_init(void)
+for	
+	设置输入流解码器，并打开解码器
+	init_input_stream
+	        //解码上下文时间基设置为输入流的时间基
+       		ist->dec_ctx->pkt_timebase = ist->st->time_base;
+		avcodec_open2		
+for
+	//初始化输出流，打开编码器,注意这里的逻辑，音视频流被忽略了，没有处理音视频流！！！
+        //那音视频流在哪处理了，todo
+        //真正打开编码器和写入header是在reap_filters -> do_video_out/do_audio_out（一层层调用）
+        //也就是说在第一个packet被解码出来之后，
+	init_output_stream_wrapper
+		//初始化输出流，打开编码器
+		init_output_stream
+		         //初始化编码器参数，如帧率、宽高、采样格式等等(如果需要编码)
+		         //其中还会初始化编码器上下文的时间基，最后复用muxer时间基等于编码器时间基
+       			 ret = init_output_stream_encode(ost, frame);
+       			 avcodec_open2
+       			 avcodec_parameters_from_context
+       			 //输出流时间基等于编码器时间基
+            		 ost->st->time_base = av_add_q(ost->enc_ctx->time_base, (AVRational){0, 1});
+       			 //不需要编码，stream copy的处理
+        		 if init_output_stream_streamcopy(ost);
+	  		 //初始化标志置1
+   			 ost->initialized = 1;
+   			 //check,并向输出文件写入header
+   			 check_init_output_file(output_files[ost->file_index], ost->file_index);
+   			 	avformat_write_header
+check,并向输出文件写入header，上面也写了一次，代研究
+check_init_output_file
+
+//具体转码工作,注意此函数在循环里面
+static int transcode_step(void)
+    //选择时间戳最小的流，以便一直循环遍历,todo ???
+    ost = choose_output();
+    //配置filter，关系到解码后数据的输入输出，也非常重要
+    configure_filtergraph(ost->filter->graph)
+    transcode_from_filter
+    //重点函数,从输入文件中read packet并解码
+    ret = process_input(ist->file_index);
+    	//从输入文件中read一个packet,这是主要数据来源，av_read_frame
+    	ret = get_input_packet(ifile, &pkt);
+    		av_read_frame
+    	//解码packet，并送入filter
+    	process_input_packet
+    		//解码音频，流程和视频一样
+    		decode_audio
+    		//解码视频
+    		decode_video
+    			decode
+    				avcodec_send_packet
+    				avcodec_receive_frame
+    			//经过一层层调用，最终会调用av_buffersrc_add_frame_flags将frame送入filter的输入
+    			err = send_frame_to_filters(ist, decoded_frame);
+    				ifilter_send_frame
+    					//如果需要重新初始化filter
+    					configure_filtergraph()
+    					//送入filter输入
+    					av_buffersrc_add_frame_flags
+    		transcode_subtitles
+    		如果是copy直接写入输出
+    		do_streamcopy
+    			output_packet
+    				write_packet
+    //从filter获取数据，进行编码封装
+    reap_filters(0)	 
+   	 av_buffersink_get_frame_flags
+   	 //注意首先:转成编码器时间基 -> 编码 -> 转成mxuer时间基
+   	 do_video_out
+   	 	 //打开编码器，写入header
+   		 init_output_stream_wrapper
+   			 check_init_output_file
+   				 avformat_write_header
+   		 //编码
+   		 avcodec_send_frame
+   		 avcodec_receive_packet
+   		 //写入输出
+   		 output_packet
+   		 	//最终再转成输出流时间基
+   		 	write_packet
+   		 		av_interleaved_write_frame
+   		 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 
+   			 

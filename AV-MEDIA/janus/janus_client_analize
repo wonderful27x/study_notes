@@ -1,0 +1,269 @@
+#初始化,静态方法
+Janus.init(){
+
+	#var 初始化一些变量 
+	logLevel
+	webrtcAdapter
+	http
+	websocket
+	extension
+
+	#method 初始化一些方法 
+	Janus.listDevices()       #列举设备
+	Janus.attachMediaStream() #将strem设置到控件显示
+	window.addEventListener() #close window
+
+	#check 兼容性检测 
+	vp8
+	unified plan
+
+	#callback 初始化完成后回调
+	options.callback()
+}
+
+#显示流到控件上，静态方法
+Janus.attachMediaStream = function(element,stream){
+	element.srtObject = stream;
+}
+
+#Janus核心类
+Janus(callback){
+	websocket = true #选择网络协议
+	#设置ice
+	var iceServers = callback.iceServers 
+	var iceTransportPolicy = callback.iceTransportPolicy
+	var bundlePolicy = callback.bundlePolicy
+	#设置一些超时时间
+	...
+	#定义核心变量
+	var connected = false;
+	var sseionId = null;
+	var pluginHandles = {};
+	var transactions = {};
+	var that = this;
+	#调用方法创建session
+	createSession(callback);
+	
+	#定义核心方法
+	#绑定插件，它会调用createHandle
+	this.attach = function(callback){createHandle(callback);};
+	#处理websocket收到的信令
+	function handleEvent(json){
+		#对应create session,调用transaction方法，最终callback.success得以调用
+		#对应createHandle,调用transaction方法，最终callback.success得以调用
+		if(json["janus"] == "success"){
+			transaction = json["transaction"]
+			function report = transactions[transaction]
+			report(json);
+		}
+		#将消息回调给插件的onmessage方法，如插件video-root实现了这个方法
+		if(json["janus"] == "event"){
+			jsep = json["jsep"];
+			data = json["data"];
+			pluginHandle = pluginHandles[json["sender"]];
+			callback = pluginHandle.onmessage;
+			callback(data,jsep);	
+		}
+		#peerConnection设置candidate
+		if(json["janus"] == "trickle"){
+			candidate = json["candidate"];
+			pluginHandle = pluginHandles[json["sender"]];
+			config = pluginHandle.webrtcStuff;
+			config.pc.addIceCandidate(candidate);
+		}
+		if(json["janus"] == "keepalive")
+		if(json["janus"] == "ack")
+		...
+	}
+	
+	#通过websocket向服务器发送创建session的信令
+	function createSession(callback){
+		#创建transaction,当前信令的标识id
+		var transaction = Janus.randomString(12);
+		#创建信令request
+		var request = {"janus":"create","transaction":transaction};
+		#创建websocket并设置回调
+		ws = Janus.newWebsockt();
+		open(){
+			#创建transaction处理函数,成功后通过handleEvent调用
+			transactions[transaction] = function(json){
+				connected = true;
+				seesionId = json.sessionId;
+				callback.success();
+			}
+			#websocket连接成功后发送请求创建session的信令
+			ws.send(request);
+		}
+		message(event) -> handleEvent(JSON.parse(event.data));
+		ws.addEventListener(error(),open(),message(),close())
+	}
+	
+	#发送消息
+	function sendMessage(handleId,callback){
+		var message = callback.message;
+		var transaction = Janus.randomString(12);
+		var request = {"janus":"message","body":message,"transaction":transaction,"session_id":sessionId,"handleId":handleId};
+		transactions[transaction] = function(json){
+			if(json["janus"] == "success){
+				var data = json["plugindata"].["data"];
+				callback.success(data);
+			}else{
+				callback.success();
+			}
+		}
+		ws.send(request);
+	}		
+			
+	#创建插件
+	#!!!pluginHandle是Janus和插件交互的桥梁，如video-root插件,video-root通过pluginHandle调用janus的方法，
+	#而janus则通过gluginHandle调用video-root向其注册的方法。
+	function createHandle(callback){
+		#创建信令transaction id和request
+		var tansaction = Janus.randomString(12);
+		var request = {"janus":"attach","transaction":transaction,"session_id":sessionId};
+		#创建transaction处理函数,成功后通过handleEvent调用
+		transactions[transaction] = function(json){
+			var handleId = json.data["id"];
+			#创建插件并加入集合，它封装了插件几乎所有的重要变量和方法
+			var pluginHandle = {
+				#私有变量
+				session:that,
+				plugin:callback.plugin,
+				id:handleId,
+				...
+				#webrtc相关
+				webrtcStuff:{
+					myStream:null,
+					remoteStream:null,
+					mySdp:null,
+					pc:null,
+					...
+					volum:{...},
+					bitrate:{...}
+				},
+				#method,核心方法
+				getId:function(){return handleId;}
+				getPlugin:function(){return plugin;}
+				...
+				muteAudio:function(){return mute(handleId,false,true);}
+				muteVideo:function(){return mute(handleId,true,true);}	
+				...
+				send:function(callback){sendMessage(handleId,callback);}
+				data:function(callback){sendData(handleId,callback);}
+				...
+				createOffer:function(callback){prepareWebrtc(handleId,true,callback);}
+				createAnswer:function(callback){prepareWebrtc(handleId,false,callback);}
+				handleRemoteJsep:function(callback){prepareWebrtcPeer(handleId,callback);}
+				...
+				hangup:function(sendRequest){cleanupWebrtc(handleId,sendRequest==true);}
+				detach:function(callback){destroyHandle(handleId,callback);}			
+				#回调方法
+				iceState:callback.iceState,
+				mediaState:callback.mediaState,
+				webrtcState:callback.webrtcState,
+				slowLink:callback.slowLindk,
+				onmessage:callback.onmessage,
+				onlocalstream:callback.onlocalstream,
+				onremotestream:callback.onremotestream,
+				ondata:callback.ondata,
+				...
+			}
+			pluginHandles[handleId] = pluginHandle;
+			callback.success(pluginHandle);
+		}
+		#通过websockt发送请求
+		ws.send(request);
+	}
+	
+	#初始化webrtc,创建本地流
+	function prepareWebrtc(handleId,offer,callback){
+		#做了很多兼容性的工作
+		...
+		#创建本地流,并调用streamsDone()
+		navigator.mediaDevices.enumerateDevices(){
+			(devices)->{
+				var audioExist = devices.some()...
+				var videoExist = devices.some()...
+				#音视频约束参数
+				var gumConstraints = {
+					audio: (audioExist && !media.keepAudio) ? audioSupport : false,
+					video: (videoExist && !media.keepVideo) ? videoSupport : false
+				};
+				#创建本地流
+				navigator.mediaDevices.getUserMedia(gumConstraints){
+					(stream) -> {streamsDone(handleId,callback.jsep,callback.media,callback,stream)};
+				}
+			}
+		}
+	}
+				
+	#创建PeerConnection、添加本地流并设置一些回调
+	function streamsDone(handleId,jsep,media,callback,stream){
+		#根据id获取插件
+		var puginHandle = puginHandles[handleId];
+		#获取插件中的webrtc结构体并设置参数
+		var config = puginHandle.webrtcStuff;
+		config.myStream = stream;
+		...
+		var pc_config = {"iceServers": iceServers, "iceTransportPolicy": iceTransportPolicy, "bundlePolicy": bundlePolicy};	
+		pc_config["sdpSemantics"] = ...? "plan-b":"unified-plan";
+		var pc_constraints = ...
+		#创建PeerConnection
+		config.pc = new RTCPeerConnection(pc_config,pc_constraints);
+		#设置candidate回调，发送candidate
+		config.pc.onicecandidate = function(event){
+			var candidate = {
+				"candidate": event.candidate.candidate,
+				"sdpMid": event.candidate.sdpMid,
+				"sdpMLineIndex": event.candidate.sdpMLineIndex
+			};
+			sendTrickleCandidate(handleId,candidate);
+		}
+		#设置ontrack回调，回调给插件
+		config.pc.ontrack = function(event){
+			config.remoteStream = event.streams[0];
+			pluginHandle.onremotestream(config.remoteStream);
+		}
+		#添加本地流
+		stream.getTracks().forEach(function(track){
+			config.pc.addTrack(track,stream)
+		});
+		pluginHandle.onlocalstream(config.myStream);
+		#创建offer
+		if(!jesp){
+			createOffer(handleId,media,callback);
+		}
+		#创建answer
+		else{
+			config.pc.setRemoteDescription(jsep).then(function(){
+				config.remoteSdp = jesp.sdp;
+				createAnswer(hadnleId,media,callback);
+			}
+		}
+	}
+
+	#创建offer,设置本的sdp,回调
+	function createOffer(handleId,media,callback){
+		var pluginHandle = pluginHandles[handleId];
+		var config = puginHandle.webrtcStuff;
+		var mediaConstraints = ...
+		config.pc.createOffer(mediaConstraints).then(function(offer){
+			config.pc.setLocalDescription(offer);
+			callback.success(offer);
+		});
+	}
+	
+	#设置远端sdp
+	function prepareWebrtcPeer(handleId,callback){
+		var pluginHandle = pluginHandles[handleId];
+		var config = pluginHandle.webrtcStuff;
+		var jsep = callback.jsep;
+		config.pc.setRemoteDescription(jsep).then(function(){
+			callback.success();
+		});
+	}
+	
+	...
+}
+
+

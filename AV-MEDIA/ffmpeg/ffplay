@@ -1,0 +1,221 @@
+FFMPEG - FFPLAY 框架
+
+int main()
+    //设置log相关
+    av_log_set_flags(AV_LOG_SKIP_REPEATED);
+    parse_loglevel(argc, argv, options);
+    //注册codecs和初始化网络
+    avdevice_register_all();
+    avformat_network_init();
+    //解析option参数
+    parse_options(NULL, argc, argv, options, opt_input_file);
+    //初始化SDL
+    SDL_Init (flags)
+    SDL_CreateWindow
+    //打开流，播放器处理主要入口
+    is = stream_open(input_filename, file_iformat);
+    //播放控制事件处理
+    event_loop(is);
+    
+//打开流，播放器处理主要入口    
+static VideoState *stream_open(const char *filename,const AVInputFormat *iformat)
+    //创建VideoState并初始化一些变量
+    is = av_mallocz(sizeof(VideoState));
+    //初始化音频/视频/字幕frame队列和pakcet队列，videoState都持有它们，frame队列持有pakcet队列引用
+    frame_queue_init(&is->pictq, &is->videoq, VIDEO_PICTURE_QUEUE_SIZE, 1)
+    frame_queue_init(&is->subpq, &is->subtitleq, SUBPICTURE_QUEUE_SIZE, 0)
+    frame_queue_init(&is->sampq, &is->audioq, SAMPLE_QUEUE_SIZE, 1)
+    packet_queue_init(&is->videoq)
+    packet_queue_init(&is->audioq)
+    packet_queue_init(&is->subtitleq)
+    //初始化同步时钟,音/视频时钟和外部时钟，通常以音频时钟为基准
+    init_clock(&is->vidclk, &is->videoq.serial);
+    init_clock(&is->audclk, &is->audioq.serial);
+    init_clock(&is->extclk, &is->extclk.serial);
+    //创建数据读取线程thread
+    SDL_CreateThread(read_thread, "read_thread", is);
+    
+//1.准备工作 2.for循环读取数据 3.退出线程处理
+static int read_thread(void *arg)
+    //=============准备工作==================================
+    //alloc一个packet用于从流中读取数据包，插入队列时会调用move_ref，所以可以循环使用
+    pkt = av_packet_alloc();
+    //创建统领上下文
+    ic = avformat_alloc_context();
+    //设置中断回调，一些耗时操作，通常每轮while循环会首先调用此函数，当返回true时则退出循环，
+    //这样用户就可以控制尽早的退出，此处的函数return abort_request
+    ic->interrupt_callback.callback = decode_interrupt_cb;
+    ic->interrupt_callback.opaque = is;
+    //打开文件
+    err = avformat_open_input(&ic, is->filename, is->iformat, &format_opts);
+    //调用find_stream_info解析码流
+    avformat_find_stream_info(ic, opts);
+    //如果指定了起始播放时间则调用seek_file操作
+    avformat_seek_file(ic, -1, INT64_MIN, timestamp, INT64_MAX, 0);
+    //调用api查找用户指定的或默认的流
+    av_find_best_stream(ic, AVMEDIA_TYPE_VIDEO,st_index[AVMEDIA_TYPE_VIDEO], -1, NULL, 0);
+    av_find_best_stream(ic, AVMEDIA_TYPE_AUDIO,...);
+    av_find_best_stream(ic, AVMEDIA_TYPE_SUBTITLE,...);
+    //从流中获取相关参数，设置窗口大小及宽高比
+    set_default_window_size(codecpar->width, codecpar->height, sar);
+    //打开流，创建解码器、上下文等解码初始化工作，并创建解码线程thread
+    stream_component_open(is, st_index[AVMEDIA_TYPE_AUDIO]);
+    stream_component_open(is, st_index[AVMEDIA_TYPE_VIDEO]);
+    stream_component_open(is, st_index[AVMEDIA_TYPE_SUBTITLE]);
+    ================for循环===============================
+    //调用api处理暂停/播放,这里只针对网络流有意义,如rtsp
+    if av_read_pause(ic);
+    if av_read_play(ic);
+    //处理seek请求,seek后需要将packet队列的旧数据清理掉,并重新设置外部时钟,如果是暂停状态，显示一帧继续暂停
+    if avformat_seek_file(is->ic, -1, seek_min, seek_target, seek_max, is->seek_flags);
+    packet_queue_flush
+    set_clock(&is->extclk, NAN, 0);
+    if step_to_next_frame(is);
+    //专辑封面处理,如果视频流时专辑封面，则从流中直接取出此packet插入队列，并再插入一个空pakcet保证解码器可以冲刷出这一帧数据
+    packet_queue_put(&is->videoq, pkt);
+    packet_queue_put_nullpacket(&is->videoq, pkt, is->video_stream);
+    //如果队列满了，则不再继续读取数据
+    if ... SDL_CondWaitTimeout(is->continue_read_thread, wait_mutex, 10);
+    //播放结束循环播放处理,播放结束和流读完不一样，播放结束意味着frame队列的数据都播放完了
+    if stream_seek(is, start_time != AV_NOPTS_VALUE ? start_time : 0, 0, 0);
+    //读取一个packet,读到尾部了插入一个空packet，并设置eof标志
+    ret = av_read_frame(ic, pkt);
+    if packet_queue_put_nullpacket
+    //判断读取的数据是否在播放范围内（通过pts计算比较），是则插入队列，否则丢弃数
+    if packet_queue_put(&is->audioq, pkt);
+    if av_packet_unref(pkt);
+    ================退出线程==============================
+    avformat_close_input(&ic);
+    av_packet_free(&pkt);
+    SDL_PushEvent(&event);
+    
+    
+//根据给定的流创建并初始化响应解码器，并创建解码线程thread
+static int stream_component_open(VideoState *is, int stream_index)
+    //创建解码上下文,码流参数拷贝给解码上下文,查找解码器
+    avctx = avcodec_alloc_context3(NULL);
+    ret = avcodec_parameters_to_context(avctx, ic->streams[stream_index]->codecpar);
+    codec = avcodec_find_decoder(avctx->codec_id);
+    avcodec_open2(avctx, codec, &opts)) < 0)
+    //根据输入的音频参数结合sdl获取最终audio参数并记录到AudiaParams结构体里,设置sdk音频回调函数，打开sdl音频设备
+    if ((ret = audio_open(is, channel_layout, nb_channels, sample_rate, &is->audio_tgt)) < 0)
+    //创建并初始化解码器Decoder,启动packet队列并创建解码线程thread,启动队列会将队列的serial++
+    decoder_init(&is->auddec, avctx, &is->audioq, is->continue_read_thread)
+    decoder_start(&is->auddec, audio_thread, "audio_decoder", is)
+    decoder_init(&is->viddec, avctx, &is->videoq, is->continue_read_thread)
+    decoder_start(&is->viddec, video_thread, "video_decoder", is)
+    decoder_init(&is->subdec, avctx, &is->subtitleq, is->continue_read_thread)
+    decoder_start(&is->subdec, subtitle_thread, "subtitle_decoder", is)
+    
+    
+//解码线程
+static int video_thread(void *arg)
+for ->
+	//调用解码器解码一帧图像
+        ret = get_video_frame(is, frame);
+        	//解码一帧frame,>0解码到一帧数据, <0 abort, =0编码器被完全冲刷
+    		if ((got_picture = decoder_decode_frame(&is->viddec, frame, NULL)) < 0)
+    		//丢帧处理
+    		//当前pts和同步时钟（通常为audio)的时间差
+                double diff = dpts - get_master_clock(is);
+                if ...
+        //将一帧解码frame插入队列
+        ret = queue_picture(is, frame, pts, duration, frame->pkt_pos, is->viddec.pkt_serial);
+    
+//解码一帧frame,解码到一帧数据返回1,编码器被冲刷了返回0,-1表示abort
+static int decoder_decode_frame(Decoder *d, AVFrame *frame, AVSubtitle *sub)
+for -> 
+	switch case AVMEDIA_TYPE_VIDEO/AVMEDIA_TYPE_AUDIO:
+	avcodec_receive_frame(d->avctx, frame);
+	if (ret == AVERROR_EOF) avcodec_flush_buffers(d->avctx);
+	//从队列读取一个packet <0 abort_request，=0没读到数据，>0读到数据
+        if (packet_queue_get(d->queue, d->pkt, 1, &d->pkt_serial) < 0)
+        //解码
+        if avcodec_decode_subtitle2(d->avctx, sub, &got_frame, d->pkt);
+   	if avcodec_send_packet(d->avctx, d->pkt)
+   	
+   	
+   	
+/**
+ * @brief sdl_audio_callback
+ * @param opaque    指向user的数据
+ * @param stream    拷贝PCM的地址
+ * @param len       需要拷贝的长度
+ */
+//sdl音频回调函数，用于向sdl缓冲区填充音频数据
+//sdl有自己的缓冲区，即解码后的数据先存到sdl缓冲区，然后sdl内部再播放，但是sdl每次读取的数据长度是固定的，比如每次读8192字节的数据到缓冲区
+//然而我们解码frame的数据不一定相等，所以通常我们还会增加一级自己的缓冲区，即解码数据先到自己的缓冲区再到sdl缓冲区
+/* prepare a new audio buffer */
+static void sdl_audio_callback(void *opaque, Uint8 *stream, int len)
+	//从frame队列里读取一帧数据
+	audio_size = audio_decode_frame(is);
+		//从队列取一帧数据，更新索引
+		frame_queue_peek_readable(&is->sampq)
+		frame_queue_next(&is->sampq);
+		//非音频同步时校正样本数，todo 代研究
+  		wanted_nb_samples = synchronize_audio(is, af->frame->nb_samples);
+  		//重采样
+  		if swr_init
+	//调用SDL_MixAudioFormat拷贝数据并调节音量
+	SDL_MixAudioFormat(stream, (uint8_t *)is->audio_buf + is->audio_buf_index, AUDIO_S16SYS, len1, is->audio_volume);
+ 	//更新音频时钟
+ 	set_clock_at
+
+//控制循环事件
+static void event_loop(VideoState *cur_stream)
+for
+	//等待sdl事件到来，视频显示也在这个函数内
+        refresh_loop_wait_event(cur_stream, &event);	
+        	SDL_PumpEvents();
+        	//没获取到事件就一直循环并做视频同步显示，否则跳出循环处理事件
+        	while (!SDL_PeepEvents）
+        		//显示video
+            		video_refresh(is, &remaining_time);
+            		SDL_PumpEvents();
+	case 鼠标/键盘/退出等
+
+//刷新显示video帧
+//获取队列frame帧
+//基于serial丢帧处理，丢弃一帧，获取下一帧
+//控制当前帧是否继续显示，或者应该播放下一帧
+//基于同步的丢帧处理，获取的帧是的播放结束时刻是否落后于系统时钟
+//display
+static void video_refresh(void *opaque, double *remaining_time)
+	... //同步、丢帧等处理
+	//显示
+	video_display(is);
+		if video_open(is);      //打开video设备
+       		video_image_display(is);//显示video
+			//注意这里显示的last，因此调用前是否queue_next更新了索引将直接影响当前是要显示那一帧
+    			vp = frame_queue_peek_last(&is->pictq);
+    			//字幕处理
+			if (is->subtitle_st) ...
+			//更新纹理
+			upload_texture
+			//拷贝文理给render
+			SDL_RenderCopyEx
+
+//调用sdl api更新文理
+static int upload_texture(SDL_Texture **tex, AVFrame *frame, struct SwsContext **img_convert_ctx)
+        //根据输入图像格式获取sdl图像格式和mode
+        get_sdl_pix_fmt_and_blendmode(frame->format, &sdl_pix_fmt, &sdl_blendmode);
+        //分配texture
+	realloc_texture
+	switch (sdl_pix_fmt)
+	        //如果是sdl不支持的图像格式，则需要转换
+        	case SDL_PIXELFORMAT_UNKNOWN:
+        	//如果是YUV则调用sdl api更新纹理
+        	case SDL_PIXELFORMAT_IYUV:
+        	//否则是其他sdl支持的格式，调用api更新纹理
+        	default:
+
+
+
+
+
+
+
+
+
+
+

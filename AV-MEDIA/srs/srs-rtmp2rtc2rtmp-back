@@ -1,0 +1,1006 @@
+                                              SRS RTMP/RTC 推拉流流程框架
+
+=============================== 全局变量 ==============================
+#srs_app_threads.cpp
+#创建一些全局变量
+srs_thread_initialize()
+    // The global objects which depends on ST.
+    _srs_hybrid = new SrsHybridServer();
+    _srs_sources = new SrsLiveSourceManager();
+    _srs_stages = new SrsStageManager();
+    _srs_circuit_breaker = new SrsCircuitBreaker();
+#ifdef SRS_RTC
+    _srs_rtc_sources = new SrsRtcSourceManager();
+    _srs_blackhole = new SrsRtcBlackhole();
+
+    _srs_rtc_manager = new SrsResourceManager("RTC", true);
+    _srs_rtc_dtls_certificate = new SrsDtlsCertificate();
+#endif
+#调用关系
+srs_main_server.cpp:do_main() -> srs_thread_initialize()
+
+
+======================= （一）listen and accept =================================
+======================= rtmp 主服务监听流程图 =======================================
+#注意这里的的主流程虽然以监听rtmp为主，但是SrsServer的一些环境对rtc的监听是必不可少的，
+#我觉得可以这么理解，SrsServer是主服务，必须注册，他默认支持rtmp，而rtc/srt等作为附属服务被注册，
+#他们依赖于SrsServer主服务，并遵循同一套流程，因此分析rtc时需要先分析SrsServer主服务流程
+#关键类
+srs_main_server.cpp -> int main()
+SrsHybridServer
+SrsServerAdapter
+SrsServer
+SrsBufferListener
+SrsTcpListener
+#简化函数调用流程图
+int main() -> do_main() --> run_directly_or_daemon() ---> run_hybrid_server()
+	-> SrsHybridServer::run()
+		-> SrsServerAdapter::run()
+			-> SrsServer::listen() -> listen_rtmp()
+				-> SrsBufferListener::listen()
+					->SrsTcpListener::listen() -> cycle() --> while srs_accept()
+				<- SrsBufferListener::on_tcp_client()
+			<- SrsServer::accept_client() <- new SrsRtmpConn()/SrsHttpApi()/SrsResponseOnlyHttpConn()
+								
+#srs_main_server.cpp
+1.1 启动main函数
+int main() -> do_main() --> run_directly_or_daemon() ---> run_hybrid_server()
+	1.2 注册服务其中支持rtmp的SrsServerAdapter是主服务
+	(SrsHybridServer)_srs_hybrid->register_server(new SrsServerAdapter())
+	(SrsHybridServer)_srs_hybrid->register_server(new SrtServerAdapter())
+	(SrsHybridServer)_srs_hybrid->register_server(new RtcServerAdapter())
+	1.3 初始化SrsHybridServer
+	(SrsHybridServer)_srs_hybrid->initialize()
+	1.4 运行
+	(SrsHybridServer)_srs_hybrid->run()
+	(SrsHybridServer)_srs_hybrid->stop()
+	
+#srs_app_hybrid.cpp
+SrsHybridServer::register_server(ISrsHybridServer *svr)
+	(vector<ISrsHybridServer*>) servers.push_pack(svr)
+SrsHybridServer::run() -> for
+	servers[i]->run()
+#构造函数 SrsServerAdapter(){srs = new SrsServer()}
+1.4 运行
+SrsServerAdapter::run()
+	1.5 初始化SrsServer并开始监听
+	(SrsServer*)srs->initialize()
+	(SrsServer*)srs->listen()
+
+#srs_app_server.cpp
+#构造函数 SrsServer()
+	conn_manager = new SrsResourceManager("TCP")
+1.5 监听rtmp端口
+SrsServer::listen()
+	listen_rtmp() -> for(ip_ports)
+		1.6 实际通过SrsBufferListener来监听
+		SrsListener listener = new SrsBufferListener(this)
+		(vector<SrsListener*>)listeners.push_pack(listener)
+		listener->listen(ip,port)
+	...
+	conn_manager->start()
+2.0 创建Rtmp连接，并启动协程进入cycle
+SrsServer::accept_client(srs_netfd_t stfd)
+	ISrsStartableConnection* conn = NULL;
+	fd_to_resource(stfd,&conn)
+		conn = new SrsRtmpConn(this,stfd,ip,port)/SrsHttpApi()/SrsResponseOnlyHttpConn()
+	conn_manager->add(conn)
+	conn->start()
+
+1.6 实际通过SrsBufferListener来监听	
+SrsBufferListener::listen(string i,int p)
+	1.7 最终又通过SrsTcpListener来监听
+	listener = new SrsTcpListener(this,ip,port)
+	listener->listen()
+1.9 继续向上一层SrsServer回调
+SrsBufferListener::on_tcp_client(srs_netfd_t stfd)
+	server->accept_client(sdfd)
+
+#srs_app_listener.cpp
+#构造函数 SrsTcpListener(SrsBufferListener->this){handler = this}
+1.7 最终又通过SrsTcpListener来监听
+SrsTcpListener::listen()
+	srs_tcp_listen(ip,port,&lfd)
+	trd = new SrsSTCoroutine("tcp",this)
+	trd->start()
+1.8 accept 并向上一层SrsBufferListener回调
+SrsTcpListener::cycle() -> while
+	fd = srs_accept(lfd)
+	handler->on_tcp_client(fd)
+	
+=============================== rtc http 附属服务监听流程 ==========================================================
+#这里的流程描述了rtc的publish和play的http服务是如何注册并被响应的
+#关键类
+SrsServer
+RtcServerAdapter
+SrsGoApiRtcPublish
+SrsGoApiRtcPlay
+SrsHttpApi
+SrsResponseOnlyHttpConn
+SrsHttpConn
+SrsHttpCorsMux
+SrsHttpServeMux
+SrsHttpMuxEntry
+SrsHttpServer		
+#简化流程图 =========start===========	
+#rtc 的play和publish都是通过http请求来获取服务
+#play和publish的http服务注册/监听流程
+#1 创建http_api_mux,并注册GoApi http处理服务
+SrsServer() -> http_api_mux = new SrsHttpServerMux()  
+	RtcServerAdapter::run()
+		SrsRtcServer::listen_api()
+			#将处理http的GoApi注册到SrsHttpServeMux中
+			SrsHttpServeMux::handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this)) -> entries[pattern].handler = SrsGoApixxx
+			SrsHttpServeMux::handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this)) -> entries[pattern].handler = SrsGoApixxx
+#2 创建Http连接服务，并将http_api_mux一层层传递 (可以理解为http连接的tcp握手）
+SrsServer::accept_client()
+	fd_to_resource()
+		new SrsHttpApi(http_api_mux)
+			new SrsHttpConn(http_api_mux)
+				new SrsHttpCorsMux()
+	SrsHttpApi::start()
+		SrsHttpConn::set_crossdomain_enable()
+			SrsHttpCorsMux::initialize(http_api_mux)
+				next = http_api_mux
+		SrsHttpConn::start()
+#3 通过协程cycle监听http请求，一层层调用，最终调用GoApi处理http请求（可以理解为http请求报文）
+SrsHttpConn::cycle() -> do_cycle() -> process_requests() -> process_request()
+	SrsHttpCorsMux::serve_http()
+		SrsHttpServeMux::serve_http() -> find_handler() -> match() -> for(enties).handler
+			SrsGoApixxx.serve_http()	
+#注意，以上的流程是针对rtc publish/play 时http监听响应流程，普通的http如打开srs播放器界面（xxx.play.html)等，流程时一样的，
+#只不过是把SrsHttpApi替换成SrsResponseOnlyHttpConn,并且把SrsServer.http_api_mux替换成SrsServer.http_server,详见SrsServer类
+#简化流程图 =========end===========
+	
+#srs_app_server.cpp
+#构造函数 SrsServer()
+	conn_manager = new SrsResourceManager("TCP")
+	#http请求,二者区别见fd_to_resource()
+	http_api_mux = new SrsHttpServerMux()
+	http_server = new SrsHttpServer(this)
+SrsServer::http_handle()
+	#注册http请求url,如何/rtc/v1/play
+	http_api_mux->handle("/xxx/xxx/...",new SrsGoApixxx())
+
+#创建Rtmp连接，并启动协程进入cycle
+SrsServer::accept_client()
+	fd_to_resource(**ISrsStartableConnection conn)
+		#rtmp 推流时创建
+		if conn = new SrsRtmpConn(this,stfd,ip,port)
+		#请求播放器xxx/players/rtc_player.html时创建
+		if conn = new SrsResponseOnlyHttpConn(this,stfd,http_server,ip,port)
+		#播放流webrtc://192.168.1.14/live/livestream时创建
+		if conn = new SrsHttpApi(this,stfd,http_api_mux,ip,port)
+	conn_manager->add(conn)
+	conn->start()
+	
+#构造函数
+RtcServerAdapter(){rtc = new SrsRtcServer()}
+RtcServerAdapter::run()
+	rtc->listen_udp()
+	rtc->listen_api()
+		#这里的http_api_mux正是SrsServer里创建的
+		SrsHttpServeMux* http_api_mux = _srs_hybrid->srs()->instance()->api_server();
+		#GoApi被注册到entries中,注册http请求服务
+		(SrsHttpServerMux*)http_api_mux->handle("/rtc/v1/play/", new SrsGoApiRtcPlay(this))
+		(SrsHttpServerMux*)http_api_mux->handle("/rtc/v1/publish/", new SrsGoApiRtcPublish(this))
+	(SrsResourceManager*)_srs_rtc_manager->start()
+
+#创建SrsUdpMuxListener 监听udp
+SrsRtcServer::listen_udp() -> for(listeners)
+	SrsUdpMuxListener* listener = new SrsUdpMuxListener(this, ip, port);
+	listener->listen()
+	listeners.push_back(listener)
+	
+#udp监听	
+SrsUdpMuxListener::listen()
+	srs_udp_listen(ip,port,&lfd)
+	trd->start()
+#回调给上层
+SrsUdpMuxListener::cycle()
+	SrsUdpMuxSocket skt(lfd);
+	while
+		skt.recvfrom()
+		(SrsRtcServer*)handler->on_udp_packet(&skt)
+
+#构造函数
+SrsHttpServeMux()
+	map<string,SrsHttpMuxEntry*> entries
+#从entries中查找注册的GoApi,调用serve_http开始处理,响应http请求
+SrsHttpServeMux::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r)
+	ISrsHttpHandler *h
+	find_handler(r,&h)
+		match(r,h)
+			for(enties)
+	h->serv_http(w,r)
+			
+#构造函数
+SrsHttpMuxEntry()
+	ISrsHttpHandler* handler;
+
+#构造函数
+#内部变量http_static内部包含一个SrsHttpServerMux类型的变量
+SrsHttpServer(SrsServer* svr)
+	server = svr
+	http_stream = new SrsHttpStreamServer(svr);
+	http_static = new SrsHttpStaticServer(svr);
+
+#构造函数
+SrsHttpStaticServer
+	SrsServer* server
+	SrsHttpServerMux mux
+				
+#构造函数			
+SrsHttpApi/SrsResponseOnlyHttpConn(srs_netfd_t fd,ISrsHttpServerMux *m)
+	skt = new SrsTcpConnection(fd)
+	conn = new SrsHttpConn(this,skt,m)
+SrsHttpApi/SrsResponseOnlyHttpConn::start()
+	conn.set_crossdomain_enabled()
+	conn.start()
+
+#构造函数
+SrsHttpConn(ISrsHttpServMux *m)
+	cors = new SrsHttpCorsMux(){ISrsHttpServeMux* next}	
+	http_mux = m
+#将SrsHttpServeMux传递给了cors中的next
+SrsHttpConn::set_crossdomain_enabled()
+	cors->initialize(http_mux)
+		next = http_mux
+#协程cycle监听http请求，并最终调用SrsHttpServeMux，而SrsHttpServMux最终会找到注册的GoApi来处理和响应http
+SrsHttpConn::start() -> cycle() -> do_cycle() -> process_requests() -> process_request()
+	(SrsHttpCorsMux*) cors->serve_http(w,r)
+		(SrsHttpServeMux*)next->serv_http(w,r)
+
+=============================（二）handshake、connect、set window/chunk size、createStream ====================================
+#关键类
+SrsRtmpConn
+SrsRtmpServer
+SrsLiveSourceManager
+SrsLiveSource
+#简化函数调用流程图
+SrsRtmpConn::cycle() -> do_cycle()
+	-> SrsRtmpServer::handshake() --> connect_app() 
+	-> service_cycle()
+		-> SrsRtmpServer::set_window_ack_size() -> set_peer_bandwidth() --> set_chunk_size() ---> response_connect_app
+		-> stream_server_cycle()
+			-> SrsRtmpServer::identify_client()
+			-> SrsLiveSourceManager::fetch_or_create(**SrsLiveSource source)
+			-> SrsLiveSource::set_cache()
+			switch(info->type)
+				case SrsRtmpConnPlay:
+					#StreamBegin
+					#onStatus(NetStream.Play.Reset)
+					#onStatus(NetStream.Play.Start)
+					#|RtmpSampleAccess(false,false)
+					#onStatus(NetStream.Data.Start)
+					SrsRtmpServer::start_play()
+					playing(source)
+				case SrsRtmpConnFMLEPublish
+					#FCPublish
+					#FCPublish response
+					#createStream
+					#createStream response
+					#publish
+					#publish response onFCPublish(NetStream.Publish.Start)
+					#publish response onStatus(NetStream.Publish.Start)
+					SrsRtmpServer::start_fmle_publish()
+					publishing(source)
+
+#srs_app_rtmp_conn.cpp
+#构造函数 SrsRtmpConn(SrsServer->this,stfd,ip,port)
+	server = this
+	stfd = stfd
+	ip = ip
+	port = port
+	skt = new SrsTcpConnection(stfd)
+	rtmp = new SrsRtmpServer(skt)
+SrsRtmpConn::start()
+	skt->initialize()
+	trd->start()
+1.1进入cycle
+SrsRtmpConn::cycle()
+	do_cycle()
+		1.2 开始rtmp握手handshake
+		rtmp->handshake()
+		1.3 连接connect
+		rtmp->connect_app()
+		service_cycle()
+			1.4 设置窗口大小、chunk size和带宽
+			rtmp->set_window_ack_size()
+			rtmp->set_peer_bandwidth()
+			rtmp->set_chunk_size()
+			#响应connect ok
+			rtmp->response_connect_app()
+			stream_server_cycle()
+				1.5 判断是推流还是拉流
+				rtmp->identify_client(info->type)
+				1.6 创建source
+				SrsLiveSource *source = NULL
+				_srs_sources->fetch_or_create(server,&source)
+				#时延相关gop,是否开启gop缓存
+				source->set_cache(_srs_config->get_gop_cache())
+				switch(info->type)
+					1.7 拉流处理逻辑 createStream?、play、streamBegin
+					case SrsRtmpConnPlay:
+						#StreamBegin
+						#onStatus(NetStream.Play.Reset)
+						#onStatus(NetStream.Play.Start)
+						#|RtmpSampleAccess(false,false)
+						#onStatus(NetStream.Data.Start)
+						rtmp->start_play(info->res->stream_id)
+						playing(source)
+					1.8 推流处理逻辑 createStream、publish、onFCPublish
+					case SrsRtmpConnFMLEPublish
+						#FCPublish
+						#FCPublish response
+						#createStream
+						#createStream response
+						#publish
+						#publish response onFCPublish(NetStream.Publish.Start)
+						#publish response onStatus(NetStream.Publish.Start)
+						rtmp->start_fmle_publish(info->res->stream_id)
+						publishing(source)
+					
+		
+
+==================================（三）publish video/audio data =================================
+======================================== rtmp2rtmp ====================================================
+#关键类
+SrsRtmpConn
+SrsPublishRecvThread
+SrsRecvThread
+SrsRtmpServer
+SrsProtocol
+SrsLiveSource
+SrsLiveConsumer
+SrsMessageQueue
+SrsCommonMessage
+SrsSharedPtrMessage
+SrsGopCache
+#简化函数调用流程图
+SrsRtmpConn::publish() -> do_publish()
+	-> SrsPublishRecvThread::start()
+		-> SrsRecvThread::start() -> cycle() --> do_cycle() while
+			-> SrsRtmpServer::recv_message()
+				-> SrsProtocol::recv_message() 
+					-> recv_interlaced_message() 
+						--> read_basic_header()
+						--> read_message_hader()
+						--> read_message_payload()
+					-> on_recv_message()
+	<- SrsPublishRecvThread::consume()
+<- SrsRtmpConn::handle_publish_message()
+SrsRtmpConn::handle_publish_message() -> handle_process_publish_message()
+	-> SrsLiveSource::on_audio()
+	-> SrsLiveSource::on_video() -> on_video_imp() for
+		-> SrsLiveConsumer::enqueue()
+			-> SrsMessageQueue::enqueue()
+		
+
+1.1 创建SrsPublishRecvThread循环从推流端读取rtmp message	
+SrsRtmpConn::publishing(SrsLiveSource *source)
+	#create rtc source ...
+	1.2 创建SrsPublishRecvThread读取数据
+	SrsPublishRecvThread rtrd(rtmp,this,source...)	
+	do_publishing(source &rtrd)
+		rtrd->start()
+			1.3 交给SrsRecvThread来读取数据
+			(SrsRecvThread)trd.start()
+	
+#srs_app_recev_thread.cpp
+构造函数 SrsPublishRecvThread(SrsRtmpServer *rtmp,SrsRtmpConn *conn,SrsLiveSource *source)
+	(SrsRcevThread*) trd(this,rtmp)
+	rtmp = rtmp
+	_conn = conn
+	_source = source
+	#时延相关merge读
+	mr = _srs_config->get_mr_enabled(req->vhost);
+    	mr_sleep = _srs_config->get_mr_sleep(req->vhost);
+1.7 继续回调给上层SrsRtmpConn
+SrsPublishRecvThread::consume(SrsCommonMessage *msg)
+	_conn->handle_publish_message(_source,msg)
+	
+构造函数 SrsRecvThread(SrsPublishRecvThread->this,SrsRtmpServer *r)
+	rtmp = r
+	pumper = this
+1.3 循环中去读取数据
+SrsRecvThread::cycle()
+	#时延相关merge读
+	pumper->on_start()
+		if (mr)
+        		set_socket_buffer(mr_sleep);
+        		rtmp->set_merge_read(true, this);
+	do_cycle() -> while
+		1.4 真正的工作者是SrsRtmpServer
+		rtmp->recv_message(**SrsCommonMessage pmsg)
+			(SrsProtocol*)protocol->recv_message(pmsg) -> while
+				SrsCommonMessage *msg = NULL
+				recv_interlaced_message(&msg)
+					read_basic_header()
+						#时延相关merge读
+						(SrsFastStream*)in_buffer->(skt)
+							(SrsPublishRecvThread*)_handler->on_read()
+								if (nread < SRS_MR_SMALL_BYTES) srs_usleep(mr_sleep)
+					read_message_header()
+					read_message_payload()
+				on_recv_message(msg)
+					decode_message(msg)
+					switch
+					 	case RTMP_MSG_WindowAcknowledgementSize
+					 	case RTMP_MSG_SetChunkSize
+					 	case RTMP_MSG_UserControlMessage
+				*pmsg = msg
+		1.6 将message回调给上层SrsPublishRecvThread
+		pumper->consume(msg)
+	pumper->on_stop()
+
+1.8 分发音视频消息	
+SrsRtmpConn::handle_publish_message(SrsLiveSource *source,SrsCommonMessage *msg)
+	rtmp->decode_message(msg)
+	process_publish_message(source,msg)
+		1.9 实际由SrsLiveSource完成
+		if source->on_video(msg)
+		if source->on_audio(msg)
+		
+
+1.9 推流数据copy给每个consumer队列
+SrsLiveSource::on_audio(SrsCommonMessage* audio)...
+SrsLiveSource::on_video(SrsCommonMessage* video)
+	SrsSharedPtrMessage msg.create(video)
+	on_video_imp(msg) -> for
+		#SrsLiveSource拥有所有的consumer,而consumer拥有真正的消息队列
+		#注意如果还没有拉流端接入，这是的consumers大小是0，因此不会进入这个for循环
+		SrsLiveConsumer *consumer = consumers.at(i)
+		consumer->enqueue(msg)
+			(SrsMessageQueue*)queue->enqueue
+		#时延相关gop,缓存最后一个gop的包
+		(SrsGopCache*)gop_cache->cache(msg)
+		
+		
+====================================================== rtmp2rtc =========================================
+#简化函数调用流程图
+#1
+SrsRtmpConn::publishing() -> acquire_publish()
+		-> SrsRtcSourceManager::fetch_or_create(**SrsRtcSource rtc)
+		-> new SrsRtcFromRtmpBridger(rtc);
+		-> SrsRtcFromRtmpBridger::initialize()
+		-> SrsLiveSource::set_bridger();
+		-> SrsLiveSourceon_publish();
+#2
+SrsLiveSource::on_video() -> on_video_imp()
+	-> SrsRtcFromRtmpBridger::on_video() -> consume_packets()
+		-> SrsRtcSource::on_rtp() for
+			-> SrsRtcConsumer::enqueue()
+				-> queue.push_back()
+#3
+SrsLiveSource::on_audio() -> on_audio_imp()
+	-> SrsRtcFromRtmpBridger::on_audio() -> aac_raw_append_adts_header() --> transcode()
+		-> SrsAudioTranscoder::transcode()
+		-> package_opus()
+		-> SrsRtcSource::on_rtp() for
+			-> SrsRtcConsumer::enqueue()
+				-> queue.push_back()
+		
+#Rtmp publish时会创建rtc source
+#注意这个函数仅提取了和rtc相关的，rtmp的参考上面
+1.1 发布rtmp流时创建rtc source,并通过bridger将它和rtmp source关联起来
+SrsRtmpConn::publishing(SrsLiveSource *source)
+	acquire_publish(SrsLiveSource *source)
+		1.2 创建rtc source 并初始化
+		_srs_rtc_sources->fetch_or_create(**SrsRtcSource rtc)
+			rtc = new SrsRtcSource()
+			rtc->initialize()
+		1.3 创建bridger，并关联rtmp/rtc source,bridger持有rtc source 的引用，rtmp source 只有bridger的引用
+		SrsRtcFromRtmpBridger *bridger = new SrsRtcFromRtmpBridger(rtc);
+		bridger->initialize(req))
+		(SrsLiveSource*)source->set_bridger(bridger);
+		(SrsLiveSource*)source->on_publish();
+		
+rtmp推流数据copy给每个consumer队列
+SrsLiveSource::on_audio(SrsCommonMessage* audio)...
+	on_audio_impl(SrsSharedPtrMessage* msg)
+		bridger_->on_audio(msg)
+SrsLiveSource::on_video(SrsCommonMessage* video)
+	on_video_imp(video)
+		bridger_->on_video(video)
+	
+#构造函数
+SrsRtcFromRtmpBridger(SrsRtcSource* source)	
+	source_ = source                  //rtc source 引用
+	format = new SrsRtmpFormat()      //codec information
+	codec_ = new SrsAudioTranscoder() //音频转码，rtc用opus
+	meta = new SrsMetaCache()         //metedata cache
+
+1.4过滤并打包rtp 视频包
+SrsRtcFromRtmpBridger::on_video(SrsSharedPtrMessage* msg)
+	meta->update_vsh(msg)     //cache the sequence header if h264
+	filter()                  //判断idr，过滤B帧(rtc不支持)
+	if(idr) package_stap_a()  //idr帧添加sps/pps  
+	1.5 打包rtp
+	vector<SrsRtpPacket*> pkts;
+	if package_nalus(msg,pkts)
+	if package_single_nalu(msg,pkts)
+	if package_fu_a(msg,pkts)
+	1.6 交给SrsRtcSource
+	consume_packets(pkts) for
+		(SrsRtcSource*)source_->on_rtp(pkt)
+1.4转码并打包rtp 音频包
+SrsRtcFromRtmpBridger::on_audio(SrsSharedPtrMessage* msg)
+	aac_raw_append_adts_header()
+	transcode(SrsAudioFrame* audio)
+		1.5 转码打包
+		codec_->transcode()
+		package_opus()
+		1.6 交给SrsRtcSource
+		source_->on_rtp()
+
+#构造函数
+SrsRtcConsumer(SrsRtcSource* s)
+	source_ = s;
+	std::vector<SrsRtpPacket*> queue;
+
+#构造函数		
+SrsRtcSource()
+	ISrsRtcPublishStream* publish_stream_;
+	SrsRtcSourceDescription* stream_desc_;    // Steam description for this steam.
+	ISrsRtcSourceBridger* bridger_;           // The Source bridger, bridger stream to other source.
+	std::vector<SrsRtcConsumer*> consumers;   // To delivery stream to clients.
+1.7 将rtp包插入consumer队列
+SrsRtcSource::on_rtp(SrsRtpPacket* pkt)
+	for(consumer:consumers)
+		consumer->enqueue(pkt->copy)
+			(vector<SrsRtpPacket*>)queue.push_back(pkt)
+#初始化Rtc source
+SrsRtcSource::initialize()
+	init_for_play_before_publishing();
+		SrsRtcSourceDescription* stream_desc = new SrsRtcSourceDescription();
+		#创建audio track描述：ssrc/media payload
+		audio_track_desc = new SrsRtcTrackDescription();
+		stream_desc->audio_track_desc_ = audio_track_desc
+		audio_track_desc->ssrc_ = SrsRtcSSRCGenerator::instance()->generate_ssrc();
+		audio_track_desc->media_ = new SrsAudioPayload();
+		#创建video track描述：ssrc/media payload
+		video_track_desc = new SrsRtcTrackDescription()
+		stream_desc->video_track_descs_.push_back(video_track_desc);
+		video_track_desc->ssrc_ = SrsRtcSSRCGenerator::instance()->generate_ssrc();
+		video_track_desc->media_ = new SrsVideoPayload()
+		#将描述设置到SrsRtcSource保存起来
+		set_stream_desc(stream_desc);
+			stream_desc_ = stream_desc.copy()
+			
+======================================== rtc2rtmp ==============================================
+#和play时http响应流程基本一致，只不过这里处理http的是SrsGoApiRtcPublish
+#简化函数调用流程图
+#1
+SrsGoApiRtcPublish::serve_http() -> do_serve_http()                                            //响应http publish请求
+	-> SrsRtcServer::create_session()
+		-> SrsRtcSourceManager::fetch_or_create()                                      //创建SrsRtcSource
+		-> new SrsRtcConnection::SrsRtcConnection()                                    //创建SrsRtcConnection
+		-> do_create_session()
+			-> SrsRtcConnection::add_publisher() -> create_publisher()
+				-> new SrsRtcPublishStream()                                   //创建SrsRtcPublishStream
+				-> SrsRtcPublishStream::initialize()                           //SrsRtcPublishStream初始化
+					-> new SrsRtcAudioRecvTrack()/SrsRtcVideoRecvTrack()   //创建video/audio receive track
+					-> SrsLiveSourceManager::fetch_or_create()	       //创建SrsLiveSource
+					-> new SrsRtmpFromRtcBridger()                         //创建SrsRtmpFromRtcBridger
+					-> SrsRtmpFromRtcBridger::initialize()                 //SrsRtmpFromRtcBridger初始化
+					-> SrsLiveSource::set_bridger()                        //桥接SrsLiveSource和SrsRtcSource
+					
+#2	
+SrsUdpMuxListener::cycle()                                                                                                   //udp监听push数据
+	-> SrsRtcServer::on_udp_packet()                                                                                     //交给SrsRtcServer                                                        
+		-> SrsRtcConnection::on_rtp()                                                                                //交给SrsRtcConnection                  
+			-> SrsRtcPublishStream::on_rtp() -> on_rtp_plaintext() --> do_on_rtp_plaintext()                     //交给SrsRtcPublishStream
+				-> SrsRtcVideoRecvTrack/SrsRtcAudioRecvTrack::on_rtp()                                       //交给video/audio receive track
+					-> SrsRtcSource::on_rtp()                                                            //交给SrsRtcSource
+						-> SrsRtcConsumer::enqueue()                                                 //rtc consumer 消费rtp包
+						-> SrsRtmpFromRtcBridger::on_rtp() 
+							-> packet_video() --> packet_video_key_frame()/packet_video_rtmp()   //bridger转换video rtmp包并交给rtm source
+								-> SrsLiveSource::on_video()
+							-> transcode_audio()                                                 //bridger转换audio rtmp包并交给rtm source
+								-> SrsLiveSource::on_audio()                                 
+							
+				
+		
+			
+================================（四）play video/audio data =====================================
+================================== rtmp ========================================================
+#关键类
+SrsRtmpConn
+SrsLiveSource
+SrsLiveConsumer
+SrsQueueRecvThread
+SrsRecvThread
+SrsRtmpServer
+SrsProtocol
+SrsCommonMessage
+#简化函数调用流程图
+SrsRtmpConn::playing()
+	-> SrsLiveSource::create_consumer(*&SrsLiveConsumer consumer)
+	-> SrsLiveConsumer::consumer_dumps()
+	-> SrsQueueRecvThread::start()
+		-> SrsRecvThread::start() -> cycle() --> do_cycle() while
+			-> SrsRtmpServer::recv_message()
+				-> SrsProtocol::recv_message()
+					-> recv_interlaced_message()
+						--> read_basic_header()
+						--> read_message_hader()
+						--> read_message_payload()
+					-> on_recv_message()
+	<- SrsQueueRecvThread::consume() <- (vector<SrsCommonMessage*>) queue.push_back()
+	-> do_playing() while --> process_play_control_msg(SrsQueueRecvThread::pump())
+		-> SrsLiveConsumer::dump_packets()
+		-> SrsRtmpServer::send_and_free_messages()
+			
+1.1 创建consumer并循环从consumer队列读取数据发送给拉流端			
+SrsRtmpConn::playing(SrsLiveSource *source)
+	1.2 创建consumer
+	source->create_consumer(**SrsLiveConsumer consumer)
+	source->consumer_dumps(consumer)
+		#时延相关queue
+		consumer->set_queue_size(_srs_config->get_queue_length())
+		#时延相关gop,拷贝gop缓存给client
+		gop_cache->(consumer)
+	1.3 创建SrsQueueRecvThread来读取message
+	#注意：这里主要是读取控制消息，真正的音视频数据在consumer->enqueue里面
+	SrsQueueRecvThread trd(consumer)
+	trd.start()
+		1.4 交给SrsRecvThread来处理
+		trd.start()
+	1.8 从consumer里读取音视频数据发送给客户端
+	do_playing(source,consumer,&rtrd)
+		#时延相关merge写
+		mw_msgs = _srs_config->get_mw_msgs(req->vhost, realtime);
+		mw_sleep = _srs_config->get_mw_sleep(req->vhost);
+		skt->set_socket_buffer(mw_sleep);
+		-> while
+			#注意这里的msg正是1.7中SrsQueueRecvThread存入队列的消息
+			SrsCommonMessage *msg = rtrd->pump()
+			process_play_control_msg(consumer,msg)
+			#时延相关merge写
+			consumer->wait(mw_msgs,mw_sleep)
+			consumer->dump_packets(&msgs,count)
+				#注意这里的consumer队列的数据就是在publish是向consumer填充的数据
+				queue->dump_packets(max,msgs->msgs,count)
+			rtmp->send_and_free_message(msgs.msgs,count,info->res->stream_id)
+
+srs_app_recv_thread.cpp
+#构造函数 SrsQueueRecvThread(SrsLiveConsumer *consumer,SrsRtmpServer *rtmp)
+	(SrsRevThread *)trd(this,rtmp)
+	_consumer = consumer
+	rtmp = rtmp
+1.7 将控制消息存入队列
+SrsQueueRecvThread::consume(SrsCommonMessage* msg)
+	(vector<SrsCommonMessage*>) queue.push_back(msg)
+	
+#同上只是传递的参数为SrsQueueRecvThread
+#构造函数 SrsRecvThread(SrsQueueRecvThread->this,SrsRtmpServer *r)
+	rtmp = r
+	pumper = this
+1.4 循环读取数据
+SrsRecvThread::cycle()
+	pumper->on_start()
+	do_cycle() -> while
+		1.5 真正的工作者是SrsRtmpServer
+		rtmp->recv_message(**SrsCommonMessage pmsg)
+			(SrsProtocol*)protocol->recv_message(pmsg) -> while
+				SrsCommonMessage *msg = NULL
+				recv_interlaced_message(&msg)
+					read_basic_header
+					read_message_header
+					read_message_payload
+				on_recv_message(msg)
+					decode_message(msg)
+					switch
+					 	case RTMP_MSG_WindowAcknowledgementSize
+					 	case RTMP_MSG_SetChunkSize
+					 	case RTMP_MSG_UserControlMessage
+				*pmsg = msg
+		1.6 将message返回上一层SrsQueueRecvThread
+		pumper->consume(msg)
+	pumper->on_stop()
+	
+================================================ rtc =================================================
+#client 使用http offer sdp,server 响应的answer携带udp地址即监听端口，client 连接udp
+#sdp 中携带唯一标识a=ice-ufrag:xxx,这个标识将客户端和服务端PeerConnection联系起来
+#简化函数调用流程图
+#1
+SrsGoApiRtcPlay::serve_http() -> do_serve_http()
+	-> SrsRtcServer::create_session()
+		-> new SrsRtcConnection()
+		-> do_create_session()
+			-> SrsRtcConnction::add_player()
+				-> create_player()
+#2					-> new SrsRtcPlayStream()
+SrsUdpMuxListener::cycle()
+	-> SrsRtcServer::on_udp_packet()
+		-> SrsRtcConnection::on_stun()
+		-> SrsRtcConnection::on_dtls()
+			-> SrsSecurityTransport::on_dtls()
+				-> SrsDtls::on_dtls()
+					-> SrsDtlsServerImpl::on_dtls() -> do_on_dtls() -> do_handshake() -> on_handshake_done()
+			<- SrsSecurityTransport::on_dtls_handshake_done()
+		<- SrsRtcConnection::on_connection_established()
+	<- SrsRtcPlayStream::start()
+#3
+SrsRtcPlayStream::cycle()
+	-> SrsRtcSource::create_consumer()
+	-> while()
+		-> SrsRtcConsumer::dump_packet()
+		-> SrsRtcPlayStream::send_packet()
+			-> SrsRtcAudioSendTrack/SrsRtcVideoSendTrack::on_rtp()
+				-> SrsRtcConnection::do_send_packet()
+					-> SrsUdpMuxSocket::sendto()
+				
+
+#构造函数	
+SrsGoApiRtcPlay(SrsRtcServer *server){ server_ = server}
+// Request:
+//      POST /rtc/v1/play/
+//      {
+//          "sdp":"offer...", "streamurl":"webrtc://r.ossrs.net/live/livestream",
+//          "api":'http...", "clientip":"..."
+//      }
+// Response:
+//      {"sdp":"answer...", "sid":"..."}
+// @see https://github.com/rtcdn/rtcdn-draft
+1.1 http播放rtc流请求 (请求时offer sdp,响应时answer sdp)
+SrsGoApiRtcPlay::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r)
+	res = SrsJsonAny::object()
+	do_serve_http(w,r,res)
+		#读取http请求json串
+		string req_json;
+		r->body_read_all(req_json)
+		#转换成JsonObject
+		SrsJsonObject* req = SrsJsonAny::loads(req_json).to_object()
+		#解析用户配置信息并存入SrsRtcUserConfig
+		remote_sdp_str = req->ensure_property_string("sdp")        //offer sdp
+		streamurl = req->ensure_property_string("streamurl")
+		clientip = req->ensure_property_string("clientip")
+		api = req->ensure_property_string("api")
+		tid = req->ensure_property_string("tid")
+		SrsRtcUserConfig ruc;
+		ruc.eip_ = r->query_get("eip")
+		ruc.codec_ = r->query_get("codec")
+		ruc.publish_ = false
+		ruc.dtls_ = r->query_get("dtls")
+		ruc.srtp_ = r->query_get("encrypt")
+		ruc.req_->ip = clientip
+		ruc.remote_sdp_.pase(remote_sdp_str)
+		srs_parse_rtmp_url(streamurl, ruc.req_->tcUrl, ruc.req_->stream);
+    		srs_discovery_tc_url(ruc.req_->tcUrl, ruc.req_->schema, ruc.req_->host, ruc.req_->vhost, ruc.req_->app, ruc.req_->stream, ruc.req_->port, ruc.req_->param);
+		#构建local sdp(注意上面的sdp是remote sdp)
+		SrsSdp local_sdp                                              //answer sdp
+		1.2 将SrsRtcUserConfig和local sdp传入创建SrsRtcConnection
+		server_->create_session(&ruc,local_sdp,**SrsRtcConnection session)
+		#构建http 响应
+		res->set("code",...)
+		res->set("server",...)
+		res->set("sdp",...)
+		res->set("sessionid",...)
+
+1.2 创建session SrsRtcConnection,类似于PeerConnection
+SrsRtcServer::create_session(SrsRtcUserConfig* ruc, SrsSdp& local_sdp, SrsRtcConnection** psession)
+	SrsRtcConnction *session = new SrsRtcConnection(this,_srs_context->get_id("cid"))
+	do_create_session(ruc,local_sdp,session)
+		#1.3 创建SrsRtcPublishStream/SrsRtcPlayStream
+		if session->add_publisher(ruc,local_sdp)
+		if session->add_player(ruc,local_sdp)
+		#设置本地sdp，注意如果http请求中没有设置eip,则会从配置文件中读取作为candidate
+		username = local_ufrag + ":" + ruc->remote_sdp_.get_ice_ufrag();
+		local_sdp.set_ice_ufrag(local_ufrag);
+		local_sdp.set_ice_pwd(local_pwd);
+		local_sdp.set_fingerprint_algo("sha-256");
+		local_sdp.set_fingerprint(_srs_rtc_dtls_certificate->get_fingerprint());
+		local_sdp.add_candidate(host, port, "host");
+		...
+		#将local_sdp 和 remote_sdp 设置到session SrsRtcConnection中，并初始化
+		session.set_remote_sdp(ruc.remote_sdp_)
+		session.set_local_sdp(local_sdp)
+		session->initialize()
+		#将session SrsRtcConnection添加到集合管理
+		#注意: key等于local_sdp.ice-ufrag:remote_sdp.ice-ufrag
+		_srs_rtc_manager->add_with_name(username,session)
+
+#构造函数
+SrsSecurityTransport(SrsRtcConnection* s)
+	session_ = s;
+	dtls_ = new SrsDtls((ISrsDtlsCallback*)this){impl = new SrsDtlsEmptyImpl():SrsDtlsImpl(NULL)}
+	srtp_ = new SrsSRTP();
+	
+#构造函数
+SrsRtcConnection(SrsRtcServer* s, const SrsContextId& cid)
+	server_ = s
+	transport_ = new SrsSecurityTransport(this)
+	//play/publish stream 集合
+	std::map<std::string, SrsRtcPlayStream*> players_;
+	std::map<std::string, SrsRtcPublishStream*> publishers_;
+	SrsUdpMuxSocket* sendonly_skt;// The peer address, client maybe use more than one address, it's the current selected one.
+	std::map<std::string, SrsUdpMuxSocket*> peer_addresses_; //The address list, client may use multiple addresses.
+#创建SrsRtcPublishStream
+SrsRtcConnection::add_publisher(SrsRtcUserConfig* ruc, SrsSdp& local_sdp)
+	#设置rtc source 描述：本地sdp...
+	SrsRtcSourceDescription* stream_desc = new SrsRtcSourceDescription();
+	negotiate_publish_capability(stream_desc)
+	#根据描述stream_desc创建sdp
+	generate_publish_local_sdp(local_sdp,stream_desc)
+	_srs_rtc_sources->fetch_or_create(**SrsRtcSource source))
+	source->set_stream_desc(stream_desc);
+	#创建SrsRtcPublishStream并初始化
+	create_publisher(req,stream_desc)
+		SrsRtcPublishStream* publisher = new SrsRtcPublishStream(this, _srs_context->get_id());
+		publisher->initialize(req,stream_desc)
+			#SrsRtcPublishStream 持有 rtc source 引用;
+			_srs_rtc_sources->fetch_or_create(req_, &source_))
+		#保存到集合中
+		publishers_[req->get_stream_url()] = publisher;
+1.3 创建SrsRtcPlayStream	
+SrsRtcConnection::add_player(SrsRtcUserConfig* ruc, SrsSdp& local_sdp)
+	#获取video/audio track描述play_sub_relations
+	map<uint32_t, SrsRtcTrackDescription*> play_sub_relations
+	1.4 获取video/audio track描述
+	negotiate_play_capability(&play_sub_relations)
+		vector<SrsRtcTrackDescription*> track_descs = source->get_track_desc("video/audio");
+		for(track_descs)
+			...?
+			track->ssrc_ = SrsRtcSSRCGenerator::instance()->generate_ssrc();
+			...?
+			play_sub_relations.insert(track)
+	1.5 构建source 描述
+	#根据play_sub_relations创建stream_desc描述
+	SrsRtcSourceDescription* stream_desc = new SrsRtcSourceDescription();
+	for(play_sub_relations) 
+		stream_desc->audio_track_desc_ = xxx
+		stream_desc->video_track_descs_.push_back(xxx);
+	1.6 根据source描述stream_desc创建sdp
+	generate_play_local_sdp(local_sdp,stream_desc)
+	#创建SrsRtcPlayStream并初始化
+	create_player(req, play_sub_relations)
+		1.7 创建SrsRtcPlayStream
+		SrsRtcPlayStream* player = new SrsRtcPlayStream(this, _srs_context->get_id());
+		1.8 初始化player
+		player->initialize(req, sub_relations))
+			#SrsRtcPlayStream 持有 rtc source 引用;
+			_srs_rtc_sources->fetch_or_create(req_, &source_))
+			1.9 创建audio/video send track
+			(map<SrsRtcAudioSendTrack*>)audio_tracks_.insert(new SrsRtcAudioSendTrack(session_,desc))
+			(map<SrsRtcVideoSendTrack*>)video_tracks_.insert(new SrsRtcVideoSendTrack(session_,desc))
+		#保存到集合中
+		players_.insert(player)
+#创建DTLS
+SrsRtcConnection::initialize()
+	SrsSecurityTransport*）transport_initialize()
+		(SrsDtls*)dtls_->initialize()
+			if (SrsDtlsImpl*)impl = new SrsDtlsClientImpl()
+			if (SrsDtlsImpl*)impl = new SrsDtlsServerImpl()
+			impl->initialize()
+
+SrsRtcConnection::on_stun(SrsUdpMuxSocket* skt)
+	update_sendonly_socket(skt);
+		peer_addresses_[skt->peer_id()] = sendonly_skt = skt->copy_sendonly()
+			new SrsUdpMuxSocket(lfd)
+		if _srs_rtc_manager->add_with_id(skt->peer_id(), this);
+		if _srs_rtc_manager->add_with_fast_id(skt->fast_id(),this)
+#2.1 udp建立加密连接dtls
+#调用dtls进行握手
+SrsRtcConnection::on_dtls()
+	（SrsSecurityTransport*）transport_->on_dtls()
+		(SrsDtls*)dtls_->on_dtls()
+			(SrsDtlsImpl*)impl->on_dtls()
+				do_on_dtls()
+					do_handshake()
+						on_handshake_done()
+							#回调给上层，最终启动publish/play stream 的start(),进入cycle循环
+							(SrsSecurityTransport*)callback_->on_dtls_handshake_done()
+								（SrsRtcConnection*)session_->on_connection_established()
+									if for(map<SrsRtcPublishStream*>publishers_) publisher->start()
+									2.2 开始播放player
+									if for(map<SrsRtcPlayStream*>players_) player->start()
+	 		
+#udp cycle循环读取数据回调给上层	SrsRtcConnection
+SrsUdpMuxListener::cycle()
+	(SrsRtcServer*)handler->on_udp_packet()
+
+2.0 udp监听到数据
+#udp回调
+SrsRtcServer::on_udp_packet(SrsUdpMuxSocket *skt)
+	SrsRtcConnection *session
+	if session = _srs_rtc_manager->find_by_fast_id(skt->fast_id())
+	if session = _srs_rtc_manager->find_by_id(skt->peer_id())
+	if session = find_session_by_username(ping.get_username())
+	if session->on_stun()
+	if session->on_rtcp()
+	if session->on_dtls()
+		
+SrsRtcPlayStream
+    std::map<uint32_t, SrsRtcAudioSendTrack*> audio_tracks_;
+    std::map<uint32_t, SrsRtcVideoSendTrack*> video_tracks_;
+2.3 创建consumer,cycle循环中读取rtp保并发送
+SrsRtcPlayStream::cycle()
+	2.4 创建rtc consumer
+	(SrsRtcSource*)source_->create_consumer(**SrsRtcConsumer consumer)
+	consumer->set_handler(this)
+	2.5 循环从consumer队列中获取packet并发送给客户端
+	while
+		consumer->dump_packet(**SrsRtcPacket pkt)
+		send_packet(pkt)
+			track = audio_tracks_/video_tracks.get(pkt->header.get_ssrc())
+			if (SrsRtcAudioSendTrack/SrsRtcVideoSendTrack*) track->on_rtp(pkt)
+			if (SrsRtcAudioSendTrack/SrsRtcVideoSendTrack*) track->on_nack(pkt)
+
+#构造函数，SrsRtcAudioSendTrack/SrsRtcVideoSendTrack持有SrsRtcConnection和SrsRtcTrackDescription引用	
+SrsRtcAudioSendTrack/SrsRtcVideoSendTrack(SrsRtcConnection* session, SrsRtcTrackDescription* track_desc)
+    : SrsRtcSendTrack(session, track_desc, true)
+		session_ = session;
+    		track_desc_ = track_desc->copy();
+2.6 rtp 包的发送实际又交给了SrsRtcConnection的socket发送
+SrsRtcAudioSendTrack/SrsRtcVideoSendTrack::on_rtp(SrsRtpPacket* pkt)
+	（SrsRtcConnection*）session_->do_send_packet(pkt)
+		（SrsUdpMuxSocket*）sendonly_skt->sendto();
+================================== rtmp 时延问题 ==============================
+推拉流流程
+1. 推流建立连接
+2. 启动协程不断读取数据，并存入拉流者队列中
+3. 拉流者启动协程不断从队列中读取数据，并发送
+
+时延1：merge读,默认关闭
+	publish配置文件
+	publish {
+		# about MR, read https://github.com/ossrs/srs/issues/241
+		# when enabled the mr, SRS will read as large as possible.
+		# default: off
+		mr          off;
+		# the latency in ms for MR(merged-read),
+		# the performance+ when latency+, and memory+,
+		#       memory(buffer) = latency * kbps / 8
+		# for example, latency=500ms, kbps=3000kbps, each publish connection will consume
+		#       memory = 500 * 3000 / 8 = 187500B = 183KB
+		# when there are 2500 publisher, the total memory of SRS at least:
+		#       183KB * 2500 = 446MB
+		# the recommended value is [300, 2000]
+		# default: 350
+		mr_latency  350;
+	}
+	步骤2中，默认mr_latency 350ms,它和码率一起响应socket buffer大小
+时延2：merge写，默认开启
+	play {
+	        # whether cache the last gop.
+		# if on, cache the last gop and dispatch to client,
+		#   to enabled fast startup for client, client play immediately.
+		# if off, send the latest media data to client,
+		#   client need to wait for the next Iframe to decode and show the video.
+		# set to off if requires min delay;
+		# set to on if requires client fast startup.
+		# default: on
+		gop_cache       off;
+		# the max live queue length in seconds.
+		# if the messages in the queue exceed the max length,
+		# drop the old whole gop.
+		# default: 30
+		queue_length    10;
+        
+		# set the MW(merged-write) latency in ms.
+		# SRS always set mw on, so we just set the latency value.
+		# the latency of stream >= mw_latency + mr_latency
+		# the value recomment is [300, 1800]
+		# @remark For WebRTC, we enable pass-timestamp mode, so we ignore this config.
+		# default: 350 (For RTMP/HTTP-FLV)
+		# default: 0 (For WebRTC)
+		mw_latency      350;
+
+		# Set the MW(merged-write) min messages.
+		# default: 0 (For Real-Time, min_latency on)
+		# default: 1 (For WebRTC, min_latency off)
+		# default: 8 (For RTMP/HTTP-FLV, min_latency off).
+		mw_msgs         8;
+	}
+	步骤3中，当消息持续时长mw_latency和消息数mw_msgs都达到设置的要求时才写一次，如mw_latency=350ms并且mw_msgs=8
+时延3：queue_length
+即拉流者的队列保存的最大时长second
+时延4：gop cache
+即是否开启gop缓存
+
+
+
+========================================================================================================================
+

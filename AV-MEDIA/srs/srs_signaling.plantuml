@@ -1,0 +1,62 @@
+@startuml
+
+title SRS signaling UML
+participant "one2one.html" as a order 1
+participant "srs.sig.js" as b order 2
+participant "srs.sdk.js" as c order 3
+participant "httpx-static" as d order 4
+participant "signaling" as e order 5
+participant "srs" as f order 6
+
+'connect and join
+a -> a : btn_start.click(){startDemo}
+a -> b : 1:connect(host,room,display)
+b -> e : websocket.connect()
+e --> b : onopen
+b --> a : onopen
+a -> b : 2:send("join")
+b -> e : websocket.send()
+e --> b : participants
+b --> a : participants
+note right : return room message \n include the ids of participants
+
+'publish stream to srs
+a -> a : startPublish()
+a -> c : 3:publish(url)
+c -> c : create local stream
+c -> c : createOffer()
+c -> c : setLocalDescription(offer)
+c -> d : post publish/offer
+note left : srs server separate from signaling`s\n use http to publish the \n stream to srs server
+d ->o f : publish stream to srs
+d --> c : answer
+note right : use lite-ice \n candidate is included in sdp
+c -> c : setRemoteDescription()
+c --> a
+
+'notify to signaling server
+a -> b : 4:notify publish
+note left : after publish stream to srs server \n refresh the signaling server \n tell about new strem published
+b -[#green]> e : websocket.send("publish")
+e --> b : publish ok
+b --> a : publish ok
+
+'play streams who published
+a -> a : startPlay()
+note left : play the streams connecting with \n participants returned in room
+a -> c : 5:for(participants.id) -> play(url)
+c -> c : createOffer()
+c -> c : setLocalDescription(offer)
+c -> d : post play/offer
+d ->o f : play stream from srs
+d --> c : answer
+c -> c : setRemoteDescription()
+c --> a : show
+
+'when new guy publish play also
+e --[#green]> b : message: some publish stream
+b --> a : message: some publish stream
+a -> a : startPlay() \n ...
+note left : the same as above
+
+@enduml
