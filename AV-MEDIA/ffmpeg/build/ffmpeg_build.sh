@@ -8,7 +8,7 @@ LIB_DIR=$HOME/wonderful/media/ffmpeg_build/lib
 PATH=$BIN_DIR:$PATH
 export PKG_CONFIG_PATH=$PREFIX_DIR/lib/pkgconfig:$PKG_CONFIG_PATH
 
-CFLAGS="-O3 -fPIC"
+CFLAGS="-g -O0 -fPIC"
 ../configure \
 	--prefix=$PREFIX_DIR \
 	--bindir=$BIN_DIR \
@@ -28,6 +28,11 @@ CFLAGS="-O3 -fPIC"
 	--enable-libx265 \
 	--enable-pic \
 	--enable-shared \
+	--enable-static \
+	--disable-vdpau \
+	--disable-vaapi \
+	--disable-cuda-llvm \
+	--disable-cuvid \
 	--enable-nonfree
 
 make && make install
