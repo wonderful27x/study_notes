@@ -1,0 +1,136 @@
+========================注意，很多流程省略了，因为在srs-rtmp2rtc2rtmp分析过，参考其分析即可======================
+======================== srs hls 推流流程 ===================
+1. 先生成tmp后缀的临时ts文件
+2. 一个完整的ts分片写入完毕，更名去掉tmp后缀，创建或更新m3u8文件
+3. 删除过时的ts分片
+
+#srs文件写入器,根据函数打断点,看调用栈
+SrsFileWriter
+	SrsFileWriter()
+	open(string p);
+	open_append(string p)
+	close()
+	write(...)
+	writev(...)
+
+#SrsFileWriter被创建的流程
+SrsLiveSource::initialize
+	SrsOriginHub::initialize		
+	 SrsDvr::initialize
+	 	SrsDvrFlvSegmenter::SrsDvrFlvSegmenter
+	 		SrsDvrSegmenter::SrsDvrSegmenter
+	 			SrsFileWriter::SrsFileWriter()
+
+#open 1	 			
+SrsRtmpConn::acquire_publish
+	SrsLiveSource::on_publish
+		SrsOriginHub::on_publish
+			SrsHls::on_publish
+				SrsHlsController::on_publish
+					SrsHlsMuxer::segment_open
+						SrsFileWriter::open
+						
+#open 2 更新m3u8文件,
+#当一个segment分片时长到了并写入了最后一个key_frame,则关闭当前segment并更新m3u8文件						
+SrsLiveSource::on_video_imp
+	SrsOriginHub::on_video
+		SrsHls::on_video
+			SrsHlsController::write_video
+				SrsHlsController::reap_segment
+					SrsHlsMuxer::segment_close
+						SrsHlsMuxer::do_segment_close	
+							SrsHlsMuxer::refresh_m3u8
+								SrsHlsMuxer::_refresh_m3u8
+									SrsFileWriter::open
+#open 3 更新ts文件，当需要创建一个新序号的segment时								
+SrsRtmpConn::handle_publish_message
+	SrsRtmpConn::process_publish_message
+		SrsLiveSource::on_video
+			SrsOriginHub::on_video
+				SrsHls::on_video
+					SrsHlsController::write_video
+						SrsHlsMuxer::segment_open
+							SrsFileWriter::open
+
+#write 1 写入pat-pmt									
+SrsRtmpConn::process_publish_message
+	SrsLiveSource::on_audio
+		SrsLiveSource::on_audio_imp
+			SrsOriginHub::on_audio
+				SrsHls::on_audio
+					SrsHlsController::write_audio
+						SrsHlsMuxer::flush_audio
+							SrsTsContextWriter::write_audio
+								SrsTsContext::encode
+									SrsTsContext::encode_pat_pmt
+										SrsFileWriter::write
+
+#write 2写入pes									
+SrsLiveSource::on_video_imp
+	SrsOriginHub::on_video
+		SrsHls::on_video
+			SrsHlsController::write_video
+				SrsHlsController::reap_segment
+					SrsHlsMuxer::flush_video
+						SrsTsContextWriter::write_video
+							SrsTsContext::encode
+								SrsTsContext::encode_pes
+									SrsFileWriter::write
+									
+=================================================== srs hls 拉流流程 =============================================
+#srs文件读取器,根据函数打断点,看调用栈
+SrsFileReader
+	SrsFileReader()
+	open()
+	read()
+
+#SrsServer构造函数中创建出SrsHttpStaticServer用于服务hls
+#SrsServerAdapter::run中初始化，注册http服务，即创建hls服务SrsHttpFileServer并于url关联
+SrsServer::SrsServer() -> http_server = new SrsHttpServer(this) --> http_static = new SrsHttpStaticServer(svr);
+	SrsServerAdapter::run() 
+		SrsServer::initialize() -> http_server->initialize() --> http_static->initialize()
+			mux.handle(mount, new SrsVodStream extends SrsHttpFileServer(dir))
+		
+#http请求使用tcp，accept时创建SrsHttpConn并start进入cycle循环,
+#注意SrsHttpConn持有http_server的引用，而http_server在上面注册了hls的http响应服务
+#于是在后面的cycle循环中SrsHttpConn就可以根据hls的http请求url查找到上面注册的相匹配的SrsHttpFileServer去处理
+SrsServer::accept_client()
+	fd_to_resource()
+		new SrsResponseOnlyHttpConn(http_server...); -> conn = new SrsHttpConn(http_server);
+	SrsResponseOnlyHttpConn::start -> SrsHttpConn::start
+		
+#创建m3u3或ts的SrsFileReader，注意他们是独立的，这个流程需要走两次分别创建他们
+SrsHttpConn::cycle
+	SrsHttpConn::do_cycle
+		SrsHttpConn::process_requests
+			SrsHttpConn::process_request
+				SrsHttpCorsMux::serve_http
+					SrsHttpServer::serve_http
+						SrsHttpServeMux::serve_http
+							SrsHttpFileServer::serve_http
+								SrsHttpFileServer::serve_file
+									ISrsFileReaderFactory::create_file_reader
+										SrsFileReader::SrsFileReader
+#调用SrsFileRead::open打开文件m3u8或ts							
+SrsHttpConn::cycle
+	SrsHttpConn::do_cycle
+		SrsHttpConn::process_requests
+			SrsHttpConn::process_request
+				SrsHttpCorsMux::serve_http
+					SrsHttpServer::serve_http
+						SrsHttpServeMux::serve_http
+							SrsHttpFileServer::serve_http
+								SrsHttpFileServer::serve_file
+#调用SrsFileRead::read读取文件m3u8或ts					SrsFileReader::open
+SrsHttpConn::cycle								
+	SrsHttpConn::do_cycle
+		SrsHttpConn::process_requests
+			SrsHttpConn::process_request
+				SrsHttpCorsMux::serve_http
+					SrsHttpServer::serve_http
+						SrsHttpServeMux::serve_http
+							SrsHttpFileServer::serve_http
+								SrsHttpFileServer::serve_file
+									SrsHttpFileServer::copy
+										SrsFileReader::read
+
