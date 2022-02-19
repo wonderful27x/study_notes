@@ -98,6 +98,7 @@ static int stream_component_open(VideoState *is, int stream_index)
     codec = avcodec_find_decoder(avctx->codec_id);
     avcodec_open2(avctx, codec, &opts)) < 0)
     //根据输入的音频参数结合sdl获取最终audio参数并记录到AudiaParams结构体里,设置sdk音频回调函数，打开sdl音频设备
+    //sdl_audio_callback
     if ((ret = audio_open(is, channel_layout, nb_channels, sample_rate, &is->audio_tgt)) < 0)
     //创建并初始化解码器Decoder,启动packet队列并创建解码线程thread,启动队列会将队列的serial++
     decoder_init(&is->auddec, avctx, &is->audioq, is->continue_read_thread)

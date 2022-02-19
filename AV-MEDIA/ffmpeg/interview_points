@@ -1,0 +1,74 @@
+基础知识
+视频:
+	yuv
+	h264
+		nalu
+音频:
+	pcm
+	aac
+		adts
+
+封装格式
+flv:
+	flv header
+	tag header
+	tag data
+mp4:
+	trak/chunk/sample
+	Media data box
+	Move box
+		stsd: 音视频解码信息
+		stts: sample时长
+		stss: 关键帧
+		stsc: chunk包含多少个sample
+		stsz: sample size
+		stco: chunk在文件中位置
+
+流媒体协议
+rtmp:
+	tcp
+	rtmp流程
+	flv tag data
+	*message、chunk
+hls:
+	http
+	m3u8
+	ts
+rtsp:
+	rtsp
+	rtp:
+		协议
+		h264组包
+		aac组包
+	rtcp:
+		SR: 发送端报告
+		RR: 接收端报告
+	sdp: m/a
+
+FFMPEG
+内存模型:
+	AVBuffer
+	AVBufferRef
+	AVPacket/AVFrame
+	代表性api:
+		av_packet_alloc
+		av_new_packet
+		av_read_frame
+数据结构:
+	AVFormatContext
+		AVInputFormat
+		AVOutputFormat
+		AVStream
+			AVCodecParameters
+基本解码流程:
+	...
+ffplay:
+	基本框架(流程)
+	packet队列
+	frame队列
+	clock时钟
+	音视频同步: clock/serial
+	暂停/逐帧播放
+	hls播放解析
+ffmpeg:
+	...
