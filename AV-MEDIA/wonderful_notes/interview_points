@@ -1,0 +1,108 @@
+基础知识
+视频:
+	yuv
+	h264
+		nalu
+音频:
+	pcm
+	aac
+		adts
+
+封装格式
+flv:
+	flv header
+	tag header
+	tag data
+mp4:
+	trak/chunk/sample
+	Media data box
+	Move box
+		stsd: 音视频解码信息
+		stts: sample时长
+		stss: 关键帧
+		stsc: chunk包含多少个sample
+		stsz: sample size
+		stco: chunk在文件中位置
+
+流媒体协议
+rtmp:
+	tcp
+	rtmp流程
+	flv tag data
+	*message、chunk
+hls:
+	http
+	m3u8
+	ts
+rtsp:
+	rtsp
+	rtp:
+		协议
+		h264组包
+		aac组包
+	rtcp:
+		SR: 发送端报告
+		RR: 接收端报告
+	sdp: m/a
+
+FFMPEG
+内存模型:
+	AVBuffer
+	AVBufferRef
+	AVPacket/AVFrame
+	代表性api:
+		av_packet_alloc
+		av_new_packet
+		av_read_frame
+数据结构:
+	AVFormatContext
+		AVInputFormat
+		AVOutputFormat
+		AVStream
+			AVCodecParameters
+基本解码流程:
+	...
+ffplay:
+	基本框架(流程)
+	packet队列
+	frame队列
+	clock时钟
+	音视频同步: clock/serial
+	暂停/逐帧播放
+	avformat_open_input/hls播放解析
+ffmpeg:
+	...
+
+SRS
+协程:
+	线程由内核调度，协程由程序控制
+整体框架:
+	listen监听
+		SrsTcpListener::listen -> 监听
+		SrsServer::accept_client -> 创建SrsRtmpConn
+	rtmp连接
+		rtmp协议: handshake、connect、createStream
+		创建SrsLiveSource
+	publish推流
+		rtmp
+			读取rtmp message -> 插入SrsLiveConsumer队列
+		rtmp -> rtc
+			创建SrsRtcSource
+			用Bridger桥将其和SrsLiveSource关联起来
+			读取rtmp message -> 打包rtp -> 插入SrsRtcConsumer队列
+	play拉流
+		rtmp
+			创建SrsLiveConsumer
+			从队列取出数据发送给客户端
+		rtc
+			client (http) -> offer sdp
+			server (http) -> answer sdp (udp地址和监听端口)
+			创建SrsRtcConnection -> 创建SrsRtcPlayStream
+			创建初始化DTLS
+			client (udp ip:port) 连接udp
+			server udp回调
+				stun打洞,连通性测试
+				udp建立dtls,交换srtp密钥
+				SrsRtcPlayStream::cycle()
+					创建SrsRtcConsumer
+					从SrsRtcConsumer队列获取数据发送到客户端

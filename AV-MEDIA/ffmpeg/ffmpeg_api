@@ -10,6 +10,7 @@ int avformat_open_input(AVFormatContext **ps, const char *filename,const AVInput
     s->priv_data = av_mallocz(s->iformat->priv_data_size)
     //调用解复用AVInputFormat::read_header解析文件,如hls对应的就是hls_read_header
     //具体的解析流程就走具体的实现，如hls就是解析m3u8文件
+    //将m3u8的playlist解析到HLSContext中，读取第0个ts分片，探测ts解复用器ff_mpegts_demuxer，解析出pat、pmt
     s->iformat->read_header(s)
 
 //初始化input，即根据各种探测，创建出具体的解复用器AVInputFormat，如ff_hls_demuxer
