@@ -706,12 +706,13 @@ SrsRecvThread::cycle()
 	pumper->on_stop()
 	
 ================================================ rtc =================================================
-#client 使用http offer sdp,server 响应的answer携带udp地址即监听端口，client 连接udp
+#client 使用http offer sdp,server 响应的answer携带udp地址即监听端口(candidate?)，client连接udp(RtcPeerConnection内部完成)
 #sdp 中携带唯一标识a=ice-ufrag:xxx,这个标识将客户端和服务端PeerConnection联系起来
 #简化函数调用流程图
 #1
 SrsGoApiRtcPlay::serve_http() -> do_serve_http()
 	-> SrsRtcServer::create_session()
+		-> SrsRtcSourceManager::fetch_or_create()
 		-> new SrsRtcConnection()
 		-> do_create_session()
 			-> SrsRtcConnction::add_player()
@@ -779,7 +780,7 @@ SrsGoApiRtcPlay::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r)
     		srs_discovery_tc_url(ruc.req_->tcUrl, ruc.req_->schema, ruc.req_->host, ruc.req_->vhost, ruc.req_->app, ruc.req_->stream, ruc.req_->port, ruc.req_->param);
 		#构建local sdp(注意上面的sdp是remote sdp)
 		SrsSdp local_sdp                                              //answer sdp
-		1.2 将SrsRtcUserConfig和local sdp传入创建SrsRtcConnection
+		1.2 将SrsRtcUserConfig和local sdp传入创建SrsRtcConnection,推流时还会创建SrsRtcSource
 		server_->create_session(&ruc,local_sdp,**SrsRtcConnection session)
 		#构建http 响应
 		res->set("code",...)
@@ -787,8 +788,9 @@ SrsGoApiRtcPlay::serve_http(ISrsHttpResponseWriter* w, ISrsHttpMessage* r)
 		res->set("sdp",...)
 		res->set("sessionid",...)
 
-1.2 创建session SrsRtcConnection,类似于PeerConnection
+1.2 创建session SrsRtcConnection,模拟RtcPeerConnection，推流时还会创建SrsRtcSource
 SrsRtcServer::create_session(SrsRtcUserConfig* ruc, SrsSdp& local_sdp, SrsRtcConnection** psession)
+	_srs_rtc_sources->fetch_or_create(...)
 	SrsRtcConnction *session = new SrsRtcConnection(this,_srs_context->get_id("cid"))
 	do_create_session(ruc,local_sdp,session)
 		1.3 创建SrsRtcPublishStream/SrsRtcPlayStream

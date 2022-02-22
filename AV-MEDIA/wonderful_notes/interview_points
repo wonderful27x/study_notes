@@ -89,20 +89,67 @@ SRS
 		rtmp -> rtc
 			创建SrsRtcSource
 			用Bridger桥将其和SrsLiveSource关联起来
-			读取rtmp message -> 打包rtp -> 插入SrsRtcConsumer队列
+			读取rtmp message -> 打包rtp -> 插入SrsRtcConsumer(与SrsRtcSource关联)队列
+		rtc -> rtmp/rtc
+			client（http) -> offer sdp/publish stream_url
+			server (http) -> answer sdp (udp地址和监听端口,candidate?)
+			创建SrsRtcSource 
+			创建SrsRtcConnection（模拟的RtcPeerConnection）
+			创建SrsRtcPublishStream
+			创建初始化DTLS
+			创建SrsLiveSource
+			创建Bridger桥将SrsRtcSource和SrsLiveSource关联起来
+			client 连接udp:ip-port（RtcPeerConnection内部完成）
+			server udp回调
+				stun打洞,连通性测试
+				udp建立dtls,交换srtp密钥
+				SrsRtcPublishStream::on_rtp()
+					将rtp包插入SrsRtcConsumer(与SrsRtcSource关联)队列
+					通过Bridger桥 -> 转rtmp -> 插入SrsLiveConsumer(与SrsLiveSource关联)队列
 	play拉流
 		rtmp
-			创建SrsLiveConsumer
+			创建SrsLiveConsumer(与SrsLiveSource关联)
 			从队列取出数据发送给客户端
 		rtc
-			client (http) -> offer sdp
-			server (http) -> answer sdp (udp地址和监听端口)
-			创建SrsRtcConnection -> 创建SrsRtcPlayStream
+			client (http) -> offer sdp/play stream_url
+			server (http) -> answer sdp (udp地址和监听端口,candidate?)
+			创建SrsRtcConnection（模拟的RtcPeerConnection）
+			创建SrsRtcPlayStream
 			创建初始化DTLS
-			client (udp ip:port) 连接udp
+			client 连接udp:ip-port（RtcPeerConnection内部完成）
 			server udp回调
 				stun打洞,连通性测试
 				udp建立dtls,交换srtp密钥
 				SrsRtcPlayStream::cycle()
-					创建SrsRtcConsumer
+					创建SrsRtcConsumer(与SrsRtcSource关联)
 					从SrsRtcConsumer队列获取数据发送到客户端
+
+WEBRTC
+基础协议:
+	NAT
+	STUN
+	TURN
+	ICE
+	DTLS（udp加密协议）
+		协商管理SRTP密钥
+		为DataChannel提供加密通道
+*ICE交互流程
+	收集canditates（向stun服务器发送stun包）
+	删除重复的candiate
+	交换candidates
+		方式一: offer/answer时携带candidate
+		方式二: 使用单独信令通道交换
+	生成candidate pairs
+	连通性检查（stun binding request/response）
+	生成validlist（将连通ok的candidate pair按优先级排序加入validlist）
+	提名candidate pair
+	选择最终传输地址
+*拥塞控制
+	TCP拥塞控制
+	WEBRTC拥塞控制
+自研webrtc多对多通话(mesh)
+	信令交换
+SRS webrtc一对一通话(sfu)
+	信令交换
+	publish发布流（publish stream_url/offer sdp）
+	play订阅流（play stream_url/offer sdp）	
