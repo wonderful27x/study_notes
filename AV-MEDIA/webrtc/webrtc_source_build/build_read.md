@@ -41,18 +41,11 @@ git config --global http.proxy 'socks5://127.0.0.1:1080'
 git config --global https.proxy 'socks5://127.0.0.1:1080'  
 
 4.设置当前shell代理(方式：命令),测试发现对python无效  
-export http_proxy='http://127.0.0.1:1080'  
-export https_proxy='https://127.0.0.1:1080'  
+export http_proxy='socks5://127.0.0.1:1080'  
+export https_proxy='socks5://127.0.0.1:1080'  
 export socks5_proxy='socks5://127.0.0.1:1080'  
 
-5.设置系统代理，这样其他应用如python就可以正常访问外网(方式：配置文件,用完后应当恢复)  
-(这似乎仍然有问题，不用担心，车道山钱币右路，往下看!!!)
-vim /etc/environmen  
-export http_proxy='http://127.0.0.1:1080'  
-export https_proxy='https://127.0.0.1:1080'  
-export socks5_proxy='socks5://127.0.0.1:1080'  
-
-6.设置depot_tools环境变量  
+5.设置depot_tools环境变量  
 #禁止更新  
 export DEPOT_TOOLS_UPDATE=0  
 #设置代理  
@@ -64,7 +57,7 @@ export DEPOT_TOOLS_UPDATE=0
 #设置环境变量NO_AUTH_BOTO_CONFIG指向此文件  
 export NO_AUTH_BOTO_CONFIG=/home/wonderful/wonderful/tools/depot_tools/http_proxy.boto  
 
-7.实际应用中如果发现还有无法下载的情况，首先应当复制连接在浏览器下载，确定没问题再根据输出信息查找问题，  
+6.实际应用中如果发现还有无法下载的情况，首先应当复制连接在浏览器下载，确定没问题再根据输出信息查找问题，  
 通常需要分析文件下载脚本如python脚本.确定问题后通常有两种解决方法，一是通过手动修复脚本重新运行脚步，  
 值得注意的是gclient sync命令通常会同步脚步，当我们修改脚步文件再gclient sync时修改的脚步又被恢复了，  
 为了解决这个问题，我们可以直接运行修改的脚本，然后再gclient snyc;第二种解决办法就是从浏览器下载文件复制到指定目录  
@@ -75,14 +68,25 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 1.运行./build/install-build-deps.sh 提示系统版本太高: ERROR: The only supported distros are...  
 	只支持Ubuntu 14.04 LTS - Ubuntu 20.10，修改install-build-deps.sh脚本，  
 	找到ERROR: The only supported distros are错误的地方，直接将exit 1注释掉  
+	运行成功后git restore install-build-deps.sh恢复文件  
 	注意不兼容的可以有可能造成错误  
-	注意这些库是通过apt安装的，因此最好先取消所有代理
+	注意这些库是通过apt安装的，因此最好先取消所有代理  
 
-2.gclient sync 卡在 install-sysroot.py
-	1).修改python脚本，使用curl代替urllib下载，具体参考back/install-sysroot.py
+> 通常由于代理问题,依赖的下载会卡在python脚本中，直接Ctrl+c，输出如下
+`Failed while running "python_name --xxx"`的内容，
+表示运行`python_name.py`这个脚本失败，其中后面的--xxx就是脚步的参数，具体的解决办法如下:
+
+2.gclient sync 卡在 install-sysroot.py  
+	1).修改python脚本，使用curl代替urllib下载，具体参考back/install-sysroot.py  
  	2).直接运行脚本(根据错误提示,有详细的命令)	
-	3).git restore install-sysroot.py 命令恢复文件
-	4).重新运行gclient sync
+	3).git restore install-sysroot.py 命令恢复文件  
+	4).重新运行gclient sync  
+
+3.gclient sync 卡在 update.py  
+	1).修改python脚本，使用curl代替urllib下载，具体参考back/update.py  
+ 	2).直接运行脚本(根据错误提示,有详细的命令)	
+	3).git restore update.py 命令恢复文件  
+	4).重新运行gclient sync  
 
 3.gclient sync 卡在 download_from_google_storage.py
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/download_from_google_storage.py
@@ -92,10 +96,7 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 	4).重新运行gclient sync
 	5).再次卡在gclient sync，根据错误提示重复上面的步骤
 	
-4.gclient sync 过程中发现最后卡在 generate_location_tags.py 
-	将/etc/environment 添加的代理去掉，然后shell命令行添加  
-	export HTTP_PROXY=socks5://127.0.0.1:1080  
-	export HTTPS_PROXY=socks5://127.0.0.1:1080  
+4.gclient sync 过程中发现最后卡在 generate_location_tags.py  
 	根据错误提示直接运行脚步
 	如: vpython3 src/testing/generate_location_tags.py --out src/testing/location_tags.json  
 	再次运行gclient sync...

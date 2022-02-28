@@ -36,22 +36,22 @@ import sys
 try:
   # For Python 3.0 and later
   from urllib.request import urlopen
-  # change
-  print('use python 3.0')
-  #======register proxy, copy from python3.8/urllib/request.py==========
-  import urllib.request
-  authinfo = urllib.request.HTTPBasicAuthHandler()
-  #authinfo.add_password(realm='PDQ Application',
-  #                      uri='https://mahler:8092/site-updates.py',
-  #                      user='klem',
-  #                      passwd='geheim$parole')
-  proxy_support = urllib.request.ProxyHandler({"http" : "http://127.0.0.1:1080"})
-  # build a new opener that adds authentication and caching FTP handlers
-  opener = urllib.request.build_opener(proxy_support, authinfo,
-                                       urllib.request.CacheFTPHandler)
-  # install it
-  urllib.request.install_opener(opener)
-  #f = urllib.request.urlopen('http://www.python.org/')
+  ## change
+  #print('use python 3.0')
+  ##======register proxy, copy from python3.8/urllib/request.py==========
+  #import urllib.request
+  #authinfo = urllib.request.HTTPBasicAuthHandler()
+  ##authinfo.add_password(realm='PDQ Application',
+  ##                      uri='https://mahler:8092/site-updates.py',
+  ##                      user='klem',
+  ##                      passwd='geheim$parole')
+  #proxy_support = urllib.request.ProxyHandler({"http" : "http://127.0.0.1:1080"})
+  ## build a new opener that adds authentication and caching FTP handlers
+  #opener = urllib.request.build_opener(proxy_support, authinfo,
+  #                                     urllib.request.CacheFTPHandler)
+  ## install it
+  #urllib.request.install_opener(opener)
+  ##f = urllib.request.urlopen('http://www.python.org/')
 
 except ImportError:
   # Fall back to Python 2's urllib2
