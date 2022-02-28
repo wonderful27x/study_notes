@@ -116,3 +116,7 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 四.运行demo  
 	程序崩溃???!!!...  
 	放弃。。。  
+	好吧，checkout 81bbd7199a2e97680a4488c2da4f8248137e12e0 这个提交历史  
+	再次编译运行  
+	只有一个画面？？？！！！  
+	再次放弃。。。
