@@ -24,16 +24,9 @@ proxy = "socks5h://127.0.0.1:1080"
 
 2.设置wget代理,参考/etc/wgetrc(方式：配置文件,用完后应当恢复)(对sudo无效)  
 vim ~/.wgetrc
-#You can set the default proxies for Wget to use for http, https, and ftp.  
-#They will override the value in the environment.  
-#https_proxy = http://proxy.yoyodyne.com:18023/  
-#http_proxy = http://proxy.yoyodyne.com:18023/  
-#ftp_proxy = http://proxy.yoyodyne.com:18023/  
 https_proxy = http://127.0.0.1:1080/  
 http_proxy = http://127.0.0.1:1080/  
-ftp_proxy = http://127.0.0.1:1080/  
-#If you do not want to use proxy at all, set this to off.  
-#use_proxy = on  
+ftp_proxy = http://127.0.0.1:1080/   
 use_proxy = on  
 
 3.设置git代理(方式：命令)  
@@ -72,34 +65,34 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 	注意不兼容的可以有可能造成错误  
 	注意这些库是通过apt安装的，因此最好先取消所有代理  
 
-> 通常由于代理问题,依赖的下载会卡在python脚本中，直接Ctrl+c，输出如下
-`Failed while running "python_name --xxx"`的内容，
+> 通常由于代理问题,依赖的下载会卡在python脚本中，直接Ctrl+c，输出如下  
+`Failed while running "python_name --xxx"`的内容，  
 表示运行`python_name.py`这个脚本失败，其中后面的--xxx就是脚步的参数，具体的解决办法如下:
 
 2.gclient sync 卡在 install-sysroot.py  
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/install-sysroot.py  
- 	2).直接运行脚本(根据错误提示,有详细的命令)	
+ 	2).直接运行脚本(根据错误提示,有详细的命令)  
 	3).git restore install-sysroot.py 命令恢复文件  
 	4).重新运行gclient sync  
 
 3.gclient sync 卡在 update.py  
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/update.py  
- 	2).直接运行脚本(根据错误提示,有详细的命令)	
+ 	2).直接运行脚本(根据错误提示,有详细的命令)  
 	3).git restore update.py 命令恢复文件  
 	4).重新运行gclient sync  
 
-3.gclient sync 卡在 download_from_google_storage.py
-	1).修改python脚本，使用curl代替urllib下载，具体参考back/download_from_google_storage.py
- 	2).直接运行脚本(根据错误提示,有详细的命令)	
-	   如:python3 src/third_party/depot_tools/download_from_google_storage.py download_from_google_storage --directory --recursive --num_threads=10 --no_auth --quiet --bucket chromium-webrtc-resources src/resources
-	3).git restore download_from_google_storage.py 命令恢复文件
-	4).重新运行gclient sync
-	5).再次卡在gclient sync，根据错误提示重复上面的步骤
+3.gclient sync 卡在 download_from_google_storage.py  
+	1).修改python脚本，使用curl代替urllib下载，具体参考back/download_from_google_storage.py  
+ 	2).直接运行脚本(根据错误提示,有详细的命令)  
+	   如: `python3 src/third_party/depot_tools/download_from_google_storage.py download_from_google_storage --directory --recursive --num_threads=10 --no_auth --quiet --bucket chromium-webrtc-resources src/resources`  
+	3).git restore download_from_google_storage.py 命令恢复文件  
+	4).重新运行gclient sync  
+	5).再次卡在gclient sync，根据错误提示重复上面的步骤  
 	
 4.gclient sync 过程中发现最后卡在 generate_location_tags.py  
-	根据错误提示直接运行脚步
-	如: vpython3 src/testing/generate_location_tags.py --out src/testing/location_tags.json  
-	再次运行gclient sync...
+	根据错误提示直接运行脚步  
+	如: `vpython3 src/testing/generate_location_tags.py --out src/testing/location_tags.json`  
+	再次运行gclient sync...  
 	祝你好运！
 	
 	
@@ -121,5 +114,5 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 
 
 四.运行demo  
-	程序崩溃???!!!...
-	放弃。。。
+	程序崩溃???!!!...  
+	放弃。。。  
