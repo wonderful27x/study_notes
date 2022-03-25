@@ -1,0 +1,28 @@
+### [目录](#目录)	
+1. android系统四层架构
+2. 从开机到view被显示出来
+	1. 系统启动流程
+	2. Activity启动流程
+	3. view 的绘制流程（测量、布局、绘制）
+	4. 事件分发流程
+3. 高级UI
+	1. 高级绘制(paint、path、canvas、pathMeasure)
+	2. 自定义view
+	3. 动画
+	4. 屏幕适配
+4. 架构
+	1. MVP
+	2. MVVM
+	3. JETPACK
+	4. AOP
+	5. APT
+	6. 组件化
+5. HANDLER
+6. BINDER
+7. JNI/NDK
+8. 相机/OPENGL
+9. 源码级开发
+	1. hook
+	2. 热修复
+	3. 插件化
+	4. 虚拟机
