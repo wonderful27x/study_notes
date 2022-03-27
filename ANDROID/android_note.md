@@ -35,7 +35,7 @@
 [android系统四层架构]: #android系统四层架构  
 [从开机到view被显示出来]: #从开机到view被显示出来  
 [系统启动流程]: #系统启动流程  
-[Activity启动流程]: #Activity启动流程  
+[Activity启动流程]: #activity启动流程  
 [view绘制流程（测量、布局、绘制）]: #view绘制流程（测量、布局、绘制）  
 [事件分发流程]: #事件分发流程  
 [高级UI]: #高级UI  
@@ -106,7 +106,7 @@ AndroidRuntime.cpp:start()
 VM都是Linux中的一个进程，VM进程、Linux进程、应用进程都可以认为是同一个概念。
 
 
-#### Activity启动流程 
+#### activity启动流程 
 **CI: IApplicationThread**(客户端Binder接口)  
 **SI: IActivityManager**(服务端Binder接口)  
 
@@ -159,4 +159,4 @@ performResumActivity -> onResume()
 
 
 #### view绘制流程（测量、布局、绘制） 
-
+#### 事件分发流程
