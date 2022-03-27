@@ -3,7 +3,7 @@
 2. [从开机到view被显示出来][]
 	1. [系统启动流程][]
 	2. [Activity启动流程][]
-	3. [view的绘制流程（测量、布局、绘制）][]
+	3. [view绘制流程（测量、布局、绘制）][]
 	4. [事件分发流程][]
 3. [高级UI][]
 	1. [高级绘制(paint、path、canvas、pathMeasure)][]
@@ -31,12 +31,12 @@
 	7. [PMS][]
 
 
-[//]: -------------------------------参考式目录跳转连接--------------------------------------------
+[^_^]: -------------------------------参考式目录跳转连接--------------------------------------------
 [android系统四层架构]: #android系统四层架构  
 [从开机到view被显示出来]: #从开机到view被显示出来  
 [系统启动流程]: #系统启动流程  
 [Activity启动流程]: #Activity启动流程  
-[view的绘制流程（测量、布局、绘制）]: #view的绘制流程（测量、布局、绘制）  
+[view绘制流程（测量、布局、绘制）]: #view绘制流程（测量、布局、绘制）  
 [事件分发流程]: #事件分发流程  
 [高级UI]: #高级UI  
 [高级绘制(paint、path、canvas、pathMeasure)]: #高级绘制(paint、path、canvas、pathMeasure)  
@@ -62,8 +62,7 @@
 [AMS]: #AMS
 [WMS]: #WMS
 [PMS]: #PMS
-
-[//]: -------------------------------参考式目录跳转连接--------------------------------------------
+[^_^]: -------------------------------参考式目录跳转连接--------------------------------------------
 
 
 ---------------------------------------------------------------------------------------------------
@@ -98,23 +97,66 @@ AndroidRuntime.cpp:start()
 	* 启动Binder线程池
 	* 创建SystemServiceManager
 	* 启动ActivityManagerService、WindowManagerService、PackageManagerService等服务
-6. AMS通过socket请求Zygote启动新进程，Zygote创建Launch应用进程  
+6. AMS通过socket请求Zygote启动新进程，Zygote创建并启动Launcher应用进程  
+	* 请求PMS获取所有安装的应用信息  
+	* 在手机屏幕显示应用图标  
 
 > **注意**: Android分为系统进程和应用进程，他们都由Zygote创建。Zygote进程通过复制自身来创建新进程，
 他在启动过程中会在内部创建虚拟机VM，每个应用进程都运行在自己的进程中，都有自己独立的VM，每个
 VM都是Linux中的一个进程，VM进程、Linux进程、应用进程都可以认为是同一个概念。
 
 
-#### Activity启动流程
+#### Activity启动流程 
 **CI: IApplicationThread**(客户端Binder接口)  
 **SI: IActivityManager**(服务端Binder接口)  
 
-| 客户端进程                                       | 服务端进程                              |
-| :----:                                           | :----:                                  | 
-| ActivityThread.AppliactionThread extends CI.Stub | ActivityManagerService extends SI.Stub  |
-| startActivity()                                  | startActivity()                         | 
-| ActivityManager.getService[^1].startActivity()   | app.thread[^2].schduleLaunchActivity()  |
+| 客户端进程                                        | 服务端进程                                 |
+| :----                                             | :----                                      | 
+| ActivityThread.AppliactionThread extends CI.Stub  | ActivityManagerService extends SI.Stub     |
+| 1. startActivity()                                | 3. startActivity()                         | 
+| 2. ActivityManager.getService[^1].startActivity() | 4. app.thread[^2].scheduleLaunchActivity() |
+| 5. scheduleLaunchActivity()                       | ...                                        |
+| 6. Handler.sendMessage(H.LAUNCH_ACTIVITY)         | ...                                        |
+| 7. [handleLaunchActivity][]                       | ...                                        |
+| 8. [handleResumeActivity][]                       | ...                                        |
 
 [^1]: 等于服务端Binder接口SI，于是调用由客户端进程到服务端进程  
 [^2]: 等于客户端Binder接口CI，因此调用从服务端进程回到客户端进程  
+
+#### handleLaunchActivity
+
+`~~~~~~~~~~~~~~~~~~~~~~~~~|-- classLoader(new Activity)`  
+`performLaunchActivity -> |-- attach() -> new PhoneWindow`  
+`~~~~~~~~~~~~~~~~~~~~~~~~~|-- Instrumentation.callActvityOnCreate()` -> [onCreate][]()  
+`~~~~~~~~~~~~~~~~~~~~~~~~~|-- performStart()` -> [onStart][]()  
+
+#### handleResumeActivity
+
+performResumActivity -> onResume()  
+
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|-- -> ViewRootImpl.set(DecorView,l)`  
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|-- -> requestLayout`   
+`WindownManagerImpl.addView ->|-- -> scheduleTranversals`  
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|-- -> postCallback`   
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|-- -> doTranversal~~~~~~~~~`|-- [measure][]	    
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~|-- -> performTranversals ->`|-- [layout][]	    
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`|-- [draw][]	  
+
+```
+等价于:  
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`|-- [mesure][]
+`WindownManagerImpl.addView -> ViewRootImpl.set(DecorView,l) -> requestLayout -> scheduleTranversals ->  postCallback -> doTranversal -> performTranversals -> `|-- [layout][]
+`~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`|-- [draw][]
+```
+
+[handleLaunchActivity]: #handleLaunchActivity
+[handleResumeActivity]: #handleResumeActivity
+[onCreate]: #onCreate
+[onStart]: #onStart
+[measure]: #measure
+[layout]: #layout
+[draw]: #draw
+
+
+#### view绘制流程（测量、布局、绘制） 
 
