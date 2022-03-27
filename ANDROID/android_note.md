@@ -2,7 +2,7 @@
 1. [android系统四层架构][]
 2. [从开机到view被显示出来][]
 	1. [系统启动流程][]
-	2. [Activity启动流程][]
+	2. [activity启动流程][]
 	3. [view绘制流程（测量、布局、绘制）][]
 	4. [事件分发流程][]
 3. [高级UI][]
@@ -11,57 +11,57 @@
 	3. [动画][]
 	4. [屏幕适配][]
 4. [架构][]
-	1. [MVP][]
-	2. [MVVM][]
-	3. [JETPACK][]
-	4. [AOP][]
-	5. [APT][]
+	1. [mvp][]
+	2. [mvvm][]
+	3. [jetpack][]
+	4. [aop][]
+	5. [apt][]
 	6. [组件化][]
-5. [HANDLER][]
-6. [BINDER][]
-7. [JNI/NDK][]
+5. [handler][]
+6. [binder][]
+7. [jni/ndk][]
 8. [相机/OPENGL][]
 9. [源码级开发][]
 	1. [hook][]
 	2. [热修复][]
 	3. [插件化][]
 	4. [虚拟机][]
-	5. [AMS][]
-	6. [WMS][]
-	7. [PMS][]
+	5. [ams][]
+	6. [wms][]
+	7. [pms][]
 
 
 [^_^]: -------------------------------参考式目录跳转连接--------------------------------------------
 [android系统四层架构]: #android系统四层架构  
 [从开机到view被显示出来]: #从开机到view被显示出来  
 [系统启动流程]: #系统启动流程  
-[Activity启动流程]: #activity启动流程  
-[view绘制流程（测量、布局、绘制）]: #view绘制流程（测量、布局、绘制）  
+[activity启动流程]: #activity启动流程  
+[view绘制流程（测量、布局、绘制）]: #view绘制流程  
 [事件分发流程]: #事件分发流程  
 [高级UI]: #高级UI  
-[高级绘制(paint、path、canvas、pathMeasure)]: #高级绘制(paint、path、canvas、pathMeasure)  
+[高级绘制(paint、path、canvas、pathMeasure)]: #高级绘制  
 [自定义view]: #自定义view  
 [动画]: #动画  
 [屏幕适配]: #屏幕适配  
 [架构]: #架构  
-[MVP]: #MVP  
-[MVVM]: #MVVM  
-[JETPACK]: #JETPACK  
-[AOP]: #AOP  
-[APT]: #APT  
+[mvp]: #mvp  
+[mvvm]: #mvvm  
+[jetpack]: #jetpack  
+[aop]: #aop  
+[apt]: #apt  
 [组件化]: #组件化  
-[HANDLER]: #HANDLER  
-[BINDER]: #BINDER  
-[JNI/NDK]: #JNI/NDK  
-[相机/OPENGL]: #相机/OPENGL  
+[handler]: #handler  
+[binder]: #binder  
+[jni/ndk]: #jni-ndk  
+[相机/OPENGL]: #相机-OPENGL  
 [源码级开发]: #源码级开发  
 [hook]: #hook  
 [热修复]: #热修复  
 [插件化]: #插件化  
 [虚拟机]: #虚拟机  
-[AMS]: #AMS
-[WMS]: #WMS
-[PMS]: #PMS
+[ams]: #ams  
+[wms]: #wms  
+[pms]: #pms  
 [^_^]: -------------------------------参考式目录跳转连接--------------------------------------------
 
 
@@ -106,7 +106,7 @@ AndroidRuntime.cpp:start()
 VM都是Linux中的一个进程，VM进程、Linux进程、应用进程都可以认为是同一个概念。
 
 
-#### activity启动流程 
+#### activity启动流程
 **CI: IApplicationThread**(客户端Binder接口)  
 **SI: IActivityManager**(服务端Binder接口)  
 
@@ -158,5 +158,6 @@ performResumActivity -> onResume()
 [draw]: #draw
 
 
-#### view绘制流程（测量、布局、绘制） 
+#### view绘制流程
 #### 事件分发流程
+#### mvp
