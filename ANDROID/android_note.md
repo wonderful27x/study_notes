@@ -5,23 +5,28 @@
 	2. [activity启动流程][]
 	3. [view绘制流程（测量、布局、绘制）][]
 	4. [事件分发流程][]
-3. [高级UI][]
+3. [四大组件][]
+	1. [activity][]
+	2. [service][]
+	3. [broadcastReceiver][]
+	4. [contentProvider][]
+4. [高级UI][]
 	1. [高级绘制(paint、path、canvas、pathMeasure)][]
 	2. [自定义view][]
 	3. [动画][]
 	4. [屏幕适配][]
-4. [架构][]
+5. [架构][]
 	1. [mvp][]
 	2. [mvvm][]
 	3. [jetpack][]
 	4. [aop][]
 	5. [apt][]
 	6. [组件化][]
-5. [handler][]
-6. [binder][]
-7. [jni/ndk][]
-8. [相机/OPENGL][]
-9. [源码级开发][]
+6. [handler][]
+7. [binder][]
+8. [jni/ndk][]
+9. [相机/OPENGL][]
+10. [源码级开发][]
 	1. [hook][]
 	2. [热修复][]
 	3. [插件化][]
@@ -38,6 +43,11 @@
 [activity启动流程]: #activity启动流程  
 [view绘制流程（测量、布局、绘制）]: #view绘制流程  
 [事件分发流程]: #事件分发流程  
+[四大组件]: #四大组件  
+[activity]: #activity  
+[service]: #service  
+[broadcastReceiver]: #broadcastReceiver  
+[contentProvider]: #contentProvider  
 [高级UI]: #高级UI  
 [高级绘制(paint、path、canvas、pathMeasure)]: #高级绘制  
 [自定义view]: #自定义view  
@@ -123,14 +133,14 @@ VM都是Linux中的一个进程，VM进程、Linux进程、应用进程都可以
 [^1]: 等于服务端Binder接口SI，于是调用由客户端进程到服务端进程  
 [^2]: 等于客户端Binder接口CI，因此调用从服务端进程回到客户端进程  
 
-#### handleLaunchActivity
+#### handlelaunchactivity
 
 `~~~~~~~~~~~~~~~~~~~~~~~~~|-- classLoader(new Activity)`  
 `performLaunchActivity -> |-- attach() -> new PhoneWindow`  
 `~~~~~~~~~~~~~~~~~~~~~~~~~|-- Instrumentation.callActvityOnCreate()` -> [onCreate][]()  
 `~~~~~~~~~~~~~~~~~~~~~~~~~|-- performStart()` -> [onStart][]()  
 
-#### handleResumeActivity
+#### handleresumeactivity
 
 performResumActivity -> onResume()  
 
@@ -149,18 +159,77 @@ performResumActivity -> onResume()
 `~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~`|-- [draw][]
 ```
 
-[handleLaunchActivity]: #handleLaunchActivity
-[handleResumeActivity]: #handleResumeActivity
-[onCreate]: #onCreate
-[onStart]: #onStart
+### view绘制流程
+#### oncreate
+```
+DecorView(继承FrameLayout)  
+|--------------------|  
+|    LinearLayout    |  
+| |----------------| | 
+| | |------------| | |  
+| | |    tab     | | | tab: 标题栏
+| | |------------| | |  
+| |                | |  
+| | |------------| | |  
+| | |            | | |  
+| | |  content   | | | content: 内容栏，继承FrameLayout, Id = R.android.content  
+| | |            | | |  
+| | |            | | |  
+| | |------------| | |  
+| |----------------| |                      
+|--------------------|  
+```
+
+```
+setContentView(layoutResId)
+	getWindow.setContentView
+		installDecorView                    //创建DecorView,并找到id为R.android.content的容器
+			mContentParent = findViewById(R.android.content)
+		inflate(layoutResId,mContentParnet) //解析xml布局，并将其设置到容器mContentParent中
+```
+
+**MeasureSpec**: 32为int值
+* 高2位表示specMode
+	* UNSPECIFIED: 父容器不对view限制，系统用
+	* EXACTLY: match_parent、固定大小
+	* ATU_MOST: wrap_content
+* 后30位表示specSize
+
+#### measure
+![测量](images/mesure.jpg)
+
+#### layout
+```
+(DecoView,params,width,height)         setFrame: 取定自身top, left, right, bottom
+PerformLayout ---------------> layout  onlayout -> layoutChildren 遍历for { layout }
+                                         ↑                                    ↓
+                                         ↑ -----← -----setFrame-----← --------↓
+```
+
+#### draw
+```
+PerformDraw -> draw -> drawSoftware -> draw
+	drawBackground: 绘制背景
+	onDraw: 绘制自己,如果时ViewGroup其实什么也没做，因为最终会调用View的onDraw,这是个空方法
+	dispatch -> 遍历for { drawChild -> draw } -> drawBackground ...
+	onDrawForeground: 绘制前景，流动条、装饰等
+```
+
+### 事件分发流程
+![事件分发](images/dispatch_1.jpg)
+![事件处理](images/dispatch_2.jpg)
+
+[handleLaunchActivity]: #handlelaunchactivity
+[handleResumeActivity]: #handleresumeactivity
+[onCreate]: #oncreate
+[onStart]: #onstart
 [measure]: #measure
 [layout]: #layout
 [draw]: #draw
 
 
-### view绘制流程
-### 事件分发流程
-
+## 四大组件
+...
 
 ## 高级UI
 ### 自定义view ([demo](https://github.com/wonderful27x/CustomGridView))
