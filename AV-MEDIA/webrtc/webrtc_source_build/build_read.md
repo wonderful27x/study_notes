@@ -1,6 +1,9 @@
 webrtc源码编译最难的是下载，下载不仅包括源码的下载，还包括各种库的下载,以及与系统匹配的依赖的下载  
 如果下载有环节出了问题通常编译也会出各种问题，下载全部完成，编译也就水到渠成了  
 下载通常需要科学上网，我使用的是shadowsocks,接下来需要设置各种应用的代理让其能访问外网  
+但是科学上网现在已经不推荐shadowsocks了，容易被封，现在主流的方案是xray:  
+* https://github.com/wonderful27x/v2ray-agent
+* https://xtls.github.io/Xray-docs-next/document/level-0/ch08-xray-clients.html#_8-2-%E5%AE%A2%E6%88%B7%E7%AB%AF%E4%B8%8E%E6%9C%8D%E5%8A%A1%E5%99%A8%E7%AB%AF%E6%AD%A3%E7%A1%AE%E8%BF%9E%E6%8E%A5  
 剩下的流程按照官方流程就行：  
 https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md  
 fetch 是下载源码  
@@ -58,7 +61,7 @@ export NO_AUTH_BOTO_CONFIG=/home/wonderful/wonderful/tools/depot_tools/http_prox
 
 二.下载源码(官方流程)  
 https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md  
-1.运行./build/install-build-deps.sh 提示系统版本太高: ERROR: The only supported distros are...  
+1. 运行./build/install-build-deps.sh 提示系统版本太高: ERROR: The only supported distros are...  
 	只支持Ubuntu 14.04 LTS - Ubuntu 20.10，修改install-build-deps.sh脚本，  
 	找到ERROR: The only supported distros are错误的地方，直接将exit 1注释掉  
 	运行成功后git restore install-build-deps.sh恢复文件  
@@ -69,19 +72,34 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 `Failed while running "python_name --xxx"`的内容，  
 表示运行`python_name.py`这个脚本失败，其中后面的--xxx就是脚步的参数，具体的解决办法如下:
 
-2.gclient sync 卡在 install-sysroot.py  
+2. gclient sync 卡在cipd
+```
+Failed while running "cipd ensure -log-level error -root /home/wonderful/wonderful/media/webrtc/webrtc_source -ensure-file /tmp/tmp0b1_osta.ensure"
+```
+直接运行:  
+```
+python3 src/tools/swarming_client/cipd.py ensure -log-level error -root /home/wonderful/wonderful/media/webrtc/webrtc_source -ensure-file /tmp/tmp0b1_osta.ensure
+```
+
+3. gclient sync 卡在 install-sysroot.py  
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/install-sysroot.py  
- 	2).直接运行脚本(根据错误提示,有详细的命令)  
+ 	2).直接运行脚本(根据错误提示,有详细的命令)，如:  
+```
+python3 src/build/linux/sysroot_scripts/install-sysroot.py --arch=amd64
+```  
 	3).git restore install-sysroot.py 命令恢复文件  
 	4).重新运行gclient sync  
 
-3.gclient sync 卡在 update.py  
+4. gclient sync 卡在 update.py  
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/update.py  
- 	2).直接运行脚本(根据错误提示,有详细的命令)  
+ 	2).直接运行脚本(根据错误提示,有详细的命令)如:  
+```
+python3 src/tools/clang/scripts/update.py
+```
 	3).git restore update.py 命令恢复文件  
 	4).重新运行gclient sync  
 
-3.gclient sync 卡在 download_from_google_storage.py  
+5. gclient sync 卡在 download_from_google_storage.py  
 	1).修改python脚本，使用curl代替urllib下载，具体参考back/download_from_google_storage.py  
  	2).直接运行脚本(根据错误提示,有详细的命令)  
 	   如: `python3 src/third_party/depot_tools/download_from_google_storage.py download_from_google_storage --directory --recursive --num_threads=10 --no_auth --quiet --bucket chromium-webrtc-resources src/resources`  
@@ -89,10 +107,11 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 	4).重新运行gclient sync  
 	5).再次卡在gclient sync，根据错误提示重复上面的步骤  
 	
-4.gclient sync 过程中发现最后卡在 generate_location_tags.py  
+6. gclient sync 过程中发现最后卡在 generate_location_tags.py  
 	根据错误提示直接运行脚步  
 	如: `vpython3 src/testing/generate_location_tags.py --out src/testing/location_tags.json`  
 	再次运行gclient sync...  
+	如果仍然没反应，试着跳过这一步直接编译  
 	祝你好运！
 	
 	
@@ -120,3 +139,5 @@ https://webrtc.googlesource.com/src/+/main/docs/native-code/development/index.md
 	再次编译运行  
 	只有一个画面？？？！！！  
 	再次放弃。。。
+	不要气馁，我又回来了！！！  
+	只有一个画面是因为虚拟摄像头只有一个可用，配置两个capture即可  
