@@ -19,9 +19,8 @@
 	1. [mvp][]
 	2. [mvvm][]
 	3. [jetpack][]
-	4. [aop][]
-	5. [apt][]
-	6. [组件化][]
+	4. [aop三剑客][]
+	5. [组件化][]
 6. [handler][]
 7. [binder][]
 8. [jni/ndk][]
@@ -57,8 +56,7 @@
 [mvp]: #mvp  
 [mvvm]: #mvvm  
 [jetpack]: #jetpack  
-[aop]: #aop  
-[apt]: #apt  
+[aop三剑客]: #aop三剑客
 [组件化]: #组件化  
 [handler]: #handler  
 [binder]: #binder  
@@ -232,11 +230,23 @@ PerformDraw -> draw -> drawSoftware -> draw
 ...
 
 ## 高级UI
-### 自定义view ([demo](https://github.com/wonderful27x/CustomGridView))
+### 自定义view ([demo-巅峰之作](https://github.com/wonderful27x/CustomGridView)) ([demo2-巅峰之作](https://github.com/wonderful27x/CustomCamera))
 ...
 
 
 ## 架构
+### aop三剑客
+
+> aop是一种面向切面的编程思想，从一系列纵向的业务中抽离出共同的部分在横向上形成一个切面，  
+集中处理这些共同的部分
+
+![aop三剑客](images/aop.webp)
+
+#### AspectJ ([demo-巅峰之作](https://github.com/wonderful27x/AopDemo))
+#### APT ([demo-巅峰之作](https://github.com/wonderful27x/AopDemo))
+#### Javassist
+
+### 组件化 ([demo](https://github.com/wonderful27x/ComponentProject))
 ...
 
 
@@ -337,13 +347,15 @@ PerformDraw -> draw -> drawSoftware -> draw
 6. GLSurfaceView.onDrawFrame被调用，update更新纹理到opengl
 7. 调用opengl绘制纹理
 
-**Camera2**([demo](https://github.com/wonderful27x/CameraCapture))
+**Camera2**([demo-巅峰之作](https://github.com/wonderful27x/CameraCapture))
 1. 获取CameraManager: getSystemService(Context.CAMERA_SERVICE)
 2. 获取CameraId: CameraManager.getCameraIdList()
 3. 打开相机CameraManager.openCamera，并获取CameraDevice
 4. 创建CameraCaptureSession: CameraDevice.createCaptureSession
 5. 创建CaptureRequest: CameraDevice.createCaptureRequest,并设置数据接收者ImageReader/Surface
 6. 发送拍照请求: CameraCaptureSession.capture(CaptureRequest)
+
+**Camera1**([demo](https://github.com/wonderful27x/CustomCamera))  
 
 ## 源码级开发
 ...
