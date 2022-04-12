@@ -1,3 +1,150 @@
+# c++多线程
+
+> 关于c++线程更详细的说明，请阅读[c++手册](https://www.apiref.com/cpp-zh/cpp/thread.html"c++线程支持库")
+
+* **线程的五种状态(这好像是java的概念?!):**
+	* 新建状态: 创建新的线程
+	* 就绪状态: 调用start()方法，等待获取cpu使用权
+	* 运行状态: 获取到cpu使用权，开始执行代码
+	* 阻塞状态: 放弃cpu使用权，暂停运行
+	* 死亡状态: 线程任务执行完毕或异常退出
+
+* **c++11多线程5个头文件**
+```
+                           |-- 线程的创建
+                |--thread -|--join
+                |          |--detach
+                |
+                |               |--get_id
+                |               |--yield
+                |--this_thread -|--sleep_for
+                |               |--sleep_until
+                |
+                |         |--mutex
+                |--mutex -|--lock_guard
+                |         |--unique_lock
+                |
+                |          |--atomic
+        thread -|--atomic -|--atomic_flag
+                |
+                |                                            
+                |                                             |-- wait
+                |                                             |-- wait_for
+                |                                             |-- wait_until
+                |                      |--condition_variable -|-- notify_one
+                |                      |                      |-- notify_all
+                |                      |                      
+                |--condition_variable -|
+                |                      |                          |-- wait
+                |                      |                          |-- wait_for
+                |                      |--condition_variable_any -|-- wait_until
+                |                                                 |-- notify_one
+                |                                                 |-- notify_all
+                |
+                |           |-- future
+                |-- future -|-- shared_future
+                            |-- promise
+                            |-- packaged_task
+```
+
+* **atomic**
+> 当一个操作由两个以上指令完成时，操作可能只执行了一个指令,变量就被另外一个线程抢占，  
+数据变得不再完整，这就是非原子操作。c++所有操作默认都是非原子操作。  
+	* atomic: 属于原子操作，只有完成和不做两种状态，不会出现数据竞争,保证数据完整性。
+
+* **thread**
+	* 构造线程
+		* thread不可拷贝构造和拷贝复值，但可移动构造和移动赋值，因此一个thread对象只表示一个线程	
+		* 线程构造后就立即开始执行
+	* join: 
+		* 阻塞当前线程直到\*this所表示的线程结束,
+		* 注意线程创建即开始执行，join和线程开始执行无关
+	* detach: 
+		* 从thread对象分离执行线程，允许执行独立地持续。一但线程退出，则释放任何分配的资源
+		* 调用detach后，\*this不再占有任何线程
+		* 注意线程创建即开始执行，detatch和线程开始执行无关
+
+* **this_thread命名空间**
+	* get_id(): 返回当前线程id
+	* yield(): 当前线程进入就绪状态，其他同优先级线程获得运行机会，注意当前线程有可能再次抢到cpu资源运行
+	* sleep_for(): 阻塞当前线程，至少经过时间sleep_duration 
+	* sleep_until(): 阻塞当前线程，直到到达指定的时间sleep_time
+
+* **mutex**: 互斥量，用于保护共享数据免受多个线程同时访问
+	* lock(): 锁定互斥，若另一线程已锁定互斥，则阻塞当前线程，直到获得锁。若当前线程已占有mutex,则行为未定义
+	* try_lock(): 尝试锁定互斥，成功返回true，失败返回false。若当前线程已占有mutex,则行为未定义
+	* unlock(): 解锁互斥，若当前线程未锁定，则行为未定义	
+	* 是公平锁吗？？？
+
+* **lock_guard**: 互斥体包装器，创建时获得互斥所有权，离开作用域调用析构函数，释放互斥量
+	* lock_guard(mutex_type &m): 调用m.lock锁定互斥
+	* lock_guard(mutex_type &m, adopt_lock_t): 不调用m.lock,认为线程已经占有了互斥，若没有占有则行为未定义
+	* 若m先于lock_guard销毁，行为未定义
+	* 析构时解锁底层互斥
+
+* **unique_lock**: 互斥包装器
+	* unique_lock(mutex_type &m): 调用m.lock锁定互斥
+	* unique_lock(mutex_type &m,defer_lock_t): 不锁定互斥
+	* unique_lock(mutex_type &m,try_to_lock_t): 调用m.try_lock尝试锁定互斥
+	* unique_lock(mutex_type &m,adopt_lock_t): 假定调用方线程已占有m
+	* lock(): 锁定互斥，等效调用m.lock()
+	* try_lock(): 尝试锁定互斥，等效调用m.try_lock()
+	* unlock(): 解锁互斥，若互斥未锁定抛出异常
+	* try_lock_for(): ...
+	* try_lock_until(): ...
+	* 析构时若占有互斥则解锁互斥
+
+* **condition_variable**: 用于阻塞一个线程，或同时阻塞多个线程，直到另一个线程修改了共享变量并通知condition_variable
+	* 有意修改共享变量的线程必须:
+		* 获得mutex所有权，通常通过lock_guard
+		* 在保有锁时进行修改
+	* 任何有意在condition_variable上等待的线程必须:
+		* 在与用作保护共享变量相同的互斥上获得unique_lock
+	* wait(): 
+		* 原子解锁lock，并阻塞当前线程，并将它添加到\*this等待线程列表
+		* 当被notify唤醒时，自动获得锁。如果条件不成立,继续wait释放锁。否则执行后面代码
+	* wait_for(): ...
+	* wait_until(): ...
+	* notify_one(): 
+		* 若任何线程在\*this上等待，解除阻塞等待的线程之一
+		* notify_one的时候通常不应该占有互斥，应先unlock再notify,否则wait被唤醒的线程由于无法获得锁而再次进入wait
+	* notify_all(): 唤醒所有等待的线程
+	* 注意condition_variable只能与unique_lock一起使用
+	* 是公平锁吗???
+
+* **condion_variable_any**: 能与任何锁一起使用
+
+* **Future**: ...
+
+* **wait和sleep的区别**: wait会释放锁，sleep不会
+
+* **公平锁和非公平锁**
+	* 公平锁: 当获取不到锁的时候进行排队，notify时根据排队的先后顺序让队首的线程先获得锁
+	* 非公平锁: 不保证上面的先后顺序，一个刚到进行lock的线程有可能比等待的人先获得锁
+
+* **悲观锁和乐观锁**
+	* 悲观锁: 认为同时操作数据时危险的，操作数据前先加锁，操作完释放锁后其他人才能获得锁，然后再对数据进行操作
+	* 乐观锁: 认为操作数据时可以不加锁，等操作完成后需要提交之前对数据进行校验。
+
+* **死锁**
+	* 当一个操作需要两个及以上的互斥锁，就有可能发生死锁。多个线程已经获取到其中一个锁，它们又互相等待对方释放另一个
+```
+Mutex lock1,lock2;
+thread1:
+        lock1.lock()
+        lock2.lock()
+        //已经获得了lock1,需要获得lock2,等待thread2释放lock2
+        lock1.unlock()
+        lock2.unlock()
+thread2:
+        lock2.lock()
+        lock1.lock()
+        //已经获得了lock2,需要获得lock1,等待thread1释放lock1
+        lock2.unlock()
+        lock1.unlock()
+```
+
+
 //======================C++_Primer[书店程序][1]======================
 [1]:<https://github.com/wonderful27x/C-_Primer_Practice/tree/main/bookstore>
 //为什么要学习书店程序？
