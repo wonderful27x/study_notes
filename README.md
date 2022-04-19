@@ -12,5 +12,6 @@ notes collection for study
   * [x] 计算机网络
   * [x] 数据库: mysql...
   * [x] 数据结构与算法
+  * [ ] tools: git、vim
 * 笔记不包含任何代码，代码将以链接给出或自行在github搜索  
 * 笔记涉及到很多前人的总结和引用，如有侵权请告知！  
