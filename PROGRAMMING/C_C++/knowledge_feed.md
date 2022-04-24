@@ -1,3 +1,21 @@
+# 链接指示: extern C
+> extern c 指示编译器按照c的风格来编译代码，其中c可是其他语言，这里有两个前提:  
+一是我们需有权访问该编译器，二是该编译器与c++编译器兼容
+
+* c++和c编译器对函数的编译是不同的，c++有函数重载编译时通常是函数名加形参类型，而c通常就是函数名
+* extern c可以用来引入c代码，在c++中使用
+* extern c也可用来修饰一个正在编写的c++代码(注意有很多限制),按照c风格编译，这样c就能调用c++代码
+* **__cplusplus**: 是c++预定义的宏，下面语句代表如果是编译c++则使用extern c包含c代码
+```
+#ifdef __cplusplus
+extern "C"{
+#enif
+//... 声明c风格函数
+#ifdef __cplusplus
+}
+#endif
+```
+
 # c++多线程
 
 > 关于c++线程更详细的说明，请阅读[c++手册](https://www.apiref.com/cpp-zh/cpp/thread.html"c++线程支持库")
