@@ -162,6 +162,50 @@ thread2:
         lock1.unlock()
 ```
 
+# socket编程
+
+* [原理和基础知识](../../AV-MEDIA/wonderful_notes/note.odt "计算机网络篇")
+
+## select模型(基于Linux)
+> select调用可以做到只通过一个线程以非阻塞(或阻塞)的方式监听多个socket的状态，当状态发生改变(可读、可写、发生错误)时立即返回，  
+从而进行读写数据，select模型内部采用轮询的方法实现，当监听的socket数量很大时会比较耗时，这时可采用epoll模型。
+
+* **timeval结构体**
+```
+struct timeval {
+	long tv_sec; //秒
+	long tv_usec;//微妙
+}
+```
+
+* **fd_set结构体**
+	* 类似一个集合，存放文件描述符，linux一切皆文件，socket也是一个文件
+	* 实现原理: 每个bit对应一个文件描述符fd，比如1字节可表示8个fd,比如  
+调用FD_ZERO后set的位为00000000,再调用FD_SET(fd=5,&set)后变为00010000
+	* int FD_SERO(int fd, fd_set *fdset) //所有位设置为0
+	* int FD_CLR(int fd, fd_set *fdset)  //清除某个fd对应的位
+	* int FD_SET(int fd, fd_set *fdset)  //设置某个fd对应的位
+	* int FD_ISSET(int fd, fd_set *fdset)//判断某个fd对于的位是否被置位 
+
+* **select函数**: `int select(int maxfdp, fd_set* readfds, fd_set* writefds, fd_set* errorfds, struct timeval* timeout)`
+	* maxfdp: 所有文件描述符的最大值加1
+	* readfds: 指向fd_set的指针，集合保存着需要读操作的socket fd集合，有可读文件返回值大于0，传入null不关心文件读变化
+	* writefds: 指向fd_set的指针，集合保存着需要写操作的socket fd集合，有可写文件返回值大于0,传入null不关心文件写变化
+	* errorfds: 上面类似，用于监视发生错误异常的文件
+	* timeout: 超时策略
+		* 传入null，select将一直阻塞到监视的文件发生变化
+		* 时间设置为0,纯粹非阻塞函数，不管监视文件是否有变化立即返回
+		* 时间设置为大于0,select调用阻塞，监视文件发生变化或超时都将返回
+	* 返回值问题
+		* <0: select发生错误
+		* \>0: 有文件可读写或发生错误
+		* =0: 等待超时，没有可读写或错误文件
+
+> 注意: select调用后根据文件的状态内部会修改fd_set的位，所以每次调用select前需要重新设置监听的fd_set  
+> 注意: select调用可以做到非阻塞，但当调用send、recv真正进行数据读写时仍然是阻塞的
+
+## poll和epoll模型
+...
 
 //======================C++_Primer[书店程序][1]======================
 [1]:<https://github.com/wonderful27x/C-_Primer_Practice/tree/main/bookstore>
