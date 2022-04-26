@@ -330,6 +330,13 @@ PerformDraw -> draw -> drawSoftware -> draw
 	* 获取jfieldID: GetFieldID(jclass,字段名,类型签名)
 	* 获取jmethodID: GetMethodID(jclass,方法名,方法签名)
 	* 调用方法: CallVoidMethod(jobject,jmethodID，参数)
+* 子线程与env: 子线程的接口回调不能使用主线程的env,需要通过JavaVM拿到子线程的env
+```
+	JNIEnv *childEnv;
+        javaVm->AttachCurrentThread(&childEnv,nullptr);
+        childEnv->CallVoidMethod(instance,prepareId);
+        javaVm->DetachCurrentThread();
+```
 
 
 ## 相机-OPENGL
