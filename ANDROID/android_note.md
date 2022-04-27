@@ -198,10 +198,11 @@ setContentView(layoutResId)
 
 #### layout
 ```
-(DecoView,params,width,height)         setFrame: 取定自身top, left, right, bottom
-PerformLayout ---------------> layout  onlayout -> layoutChildren 遍历for { layout }
-                                         ↑                                    ↓
-                                         ↑ -----← -----setFrame-----← --------↓
+(DecoView,params,width,height)         
+PerformLayout ---------------> layout -> setFrame -> onlayout -> layoutChildren 遍历for { layout }
+                                           ↑                                               ↓
+                                           ↑ ------← -------------←--------------← --------↓
+setFrame: 取定自身top, left, right, bottom
 ```
 
 #### draw
