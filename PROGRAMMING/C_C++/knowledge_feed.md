@@ -121,12 +121,7 @@ extern "C"{
 	* wait(): 
 		* 原子解锁lock，并阻塞当前线程，并将它添加到\*this等待线程列表
 		* 当被notify唤醒时，自动获得锁。如果条件不成立,继续wait释放锁。否则执行后面代码
-		* 带有条件的wait等价于,注意即便不调用notify,过一段时间wait也会被唤醒
-```
-while (!pred()) {
-    wait(lock);
-}
-```
+		* 带有条件的wait等价于`while (!pred()) {wait(lock);}`,注意即便不调用notify,过一段时间wait也会被唤醒	
 		* 由上述等价条件得，只有条件为false才会阻塞线程，为true时将会获得锁并解除阻塞
 	* wait_for(): ...
 	* wait_until(): ...
