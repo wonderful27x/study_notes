@@ -27,12 +27,15 @@ CFLAGS="-g -O0 -fPIC"
 	--enable-libx264 \
 	--enable-libx265 \
 	--enable-pic \
-	--enable-shared \
+	--disable-shared \
 	--enable-static \
 	--disable-vdpau \
 	--disable-vaapi \
 	--disable-cuda-llvm \
 	--disable-cuvid \
+	--enable-demuxer=dash \
+	--enable-libxml2 \
+	--enable-libxcb \
 	--enable-nonfree
 
 make && make install
