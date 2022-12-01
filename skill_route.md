@@ -30,6 +30,9 @@
 10. [tools](#tools)
 	1. [vim](#vim)
 	2. [git](#git)
+    3. [markdown](#markdown)
+    4. [plantuml](#plantuml)
+    5. [cmake](#cmake)
 
 
 [//]: -------------------------------------参考式目录跳转链接-------------------------------------------
@@ -64,6 +67,9 @@
 [tools]: #tools
 [vim]: #vim
 [git]: #git
+[markdown]: #markdown
+[plantuml]: #plantuml
+[cmake]: #cmake
 [//]: -------------------------------------参考式目录跳转链接-------------------------------------------
 
 

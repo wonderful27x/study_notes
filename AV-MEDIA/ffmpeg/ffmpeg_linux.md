@@ -1,3 +1,25 @@
+### raw media data
+* extract yuv and pcm
+    * `ffmpeg -i love.mp4 -s 768x432 -pix_fmt yuv420p -t 30 -y love_768x432_yuv420p_30.yuv -ar 48000 -ac 2 -f s16le -t 30 -y love_48000_2_s16le.pcm`
+* play yuv and pcm
+   * `ffplay -i love_768x432_yuv420p_30.yuv -pixel_format yuv420p -video_size 768x432 -framerate 30 -loop 100| ffplay -i love_48000_2_s16le.pcm -ar 48000 -ac 2 -f s16le -loop 100`
+
+### virtual device
+* create virual device for virtual mic [see this [solution](https://www.coder.work/article/7393349)]
+    * `pactl load-module module-null-sink sink_name="virtual_speaker" sink_properties=device.description="virtual_speaker"`
+    * `pactl load-module module-remap-source master="virtual_speaker.monitor" source_name="virtual_mic" source_properties=device.description="virtual_mic"`
+* create virtual device for virtual camera [see [akcvam](https://github.com/webcamoid/akvcam) and this [solution](https://github.com/wonderful27x/study_notes/blob/main/AV-MEDIA/ffmpeg/ffmpeg_linux.md)]
+* output media to intput of virtual device (camera and mic)
+    * `ffmpeg -i love.mp4 -f v4l2 /dev/video0 -f pulse "stream name"`
+    * `ffmpeg -re -i love.mp4 -s 768x432 -r 30 -vcodec rawvideo -pix_fmt rgb24 -f v4l2 /dev/video7 -f pulse "stream name"`
+    * `ffmpeg -i love.mp4 -f pulse "stream name" | ffmpeg -re -i love.mp4 -s 768x432 -r 30 -vcodec rawvideo -pix_fmt rgb24 -f v4l2 /dev/video7`
+* record media from virtual device (camera and mic)
+    * `ffmpeg -f alsa -i pulse -f v4l2 -i /dev/video0 out.mp4`
+* push to cloud
+    * `ffmpeg -f alsa -i pulse -f v4l2 -i /dev/video0 -f rtsp -rtsp_transport udp rtsp://127.0.0.1/live/stream`
+* play from cloud
+    * `ffplay -i rtsp://127.0.0.1/live/stream -fflags nobuffer`
+
 0.linux 虚拟摄像头akvcam,link https://github.com/webcamoid/akvcam
 1)before start install some tools
 video for linux: 
