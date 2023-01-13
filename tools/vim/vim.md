@@ -23,7 +23,9 @@
 * 从log中提取有用数据，绘制折线统计图、时分秒转换为毫秒ms、数据累加、相邻数据差值计算 [see vimrc # register macro record](https://github.com/wonderful27x/vimcofig/blob/main/.vimrc)
 
 ### skill-3
-**以列表的每一行内容作为参数依次执行外部命令，将输出保存下来**
+**以列表的每一行内容作为参数依次执行外部命令，将输出保存下来**  
+**在连续的一系列参数下运行同一条命令**
+**此技巧在git的差异检出和复杂的合并当中非常有用**
 * shell read
     * 提取列表, example see [git skill-3](../git/git.md#skill-3)
     * 将作为参数的每行内容拼接到一行并存入寄存器z, `gg100@x` see [vimrc-register @x](https://github.com/wonderful27x/vimcofig/blob/main/.vimrc) 
@@ -36,5 +38,12 @@
     * 将每一行扩充为完整的命令，在每行行首添加`git diff master...branch -- `
     * 运行命令: `:.,$!sh`
 > **原理**：`.,$`范围的每行内容会在shell中执行并将输出替换每行的内容
+* shell write
+    * 提取列表, example see [git skill-3](../git/git.md#skill-3)
+    * 将需要执行的连续的参数行扩充为完整的命令，在每行行首添加`git checkout branchX -- `
+    * 选择需要执行的范围
+    * 运行命令: `:'<,'>write !sh`
+> **原理**：在shell中执行选择范围内的每行内容
+    
 * global ...
 * 宏 ...

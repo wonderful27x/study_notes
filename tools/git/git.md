@@ -124,3 +124,6 @@
     > :1-common -> 共同祖先版本   
 :2-ours -> 合并时所在的分支  
 :3-theirs -> 需要合入的分支
+
+### skill-9
+**差异检出和复杂的合并，see [vim-skill-3](../vim/vim.md#skill-3)**
