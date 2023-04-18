@@ -127,3 +127,12 @@
 
 ### skill-9
 **差异检出和复杂的合并，see [vim-skill-3](../vim/vim.md#skill-3)**
+
+### skill-10
+**修改旧的提交，甚至是第一个提交**
+* `git rebase -i  --root` and mark `edit`
+* `vim xxx` change the commit
+* `git add xxx` stage the change
+* `git commit --amend` commit the change for the target commit
+* `git mergetool` deal the conflict
+* `git rebase --continue` finish
