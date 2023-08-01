@@ -2,6 +2,18 @@
 
 [TOC]
 
+### skill-0
+**git三棵树**
+* **HEAD**
+    * 当前分支引用的指针，该分支最后一次提交的快照，下一次提交的父节点
+    * `git clone`克隆或`git checkout`切换分支，将HEAD指向新的分支引用，并将索引填充为该次提交的快照，然后将索引的内容复制到工作区
+* **index**
+    * 索引或缓存区，预期的下一次提交
+    * `git commit`, 判断预期的下一次提交是否与上一次提交相同，提交后写入历史记录
+* **Working Directory**
+    * 工作目录或工作区，实际可编辑的文件，提交到暂存区之前的修改
+    * `git add`将工作区的内容复制到缓存区
+
 ### skill-1
 **git log 查看历史记录**
 * 显示某个提交范围内的简略统计信息，能够快速找出修改的文件  
@@ -39,6 +51,7 @@
 
 ### skill-4
 **将一个分支的特定几个文件手动合并到另一个分支**
+**将一个分支的文件拷贝到另一个分支目录**
 * checkout the branch witch you want to merge to
     * `git checkout master`
 * copy the files from the branch witch you want to merge from
@@ -136,3 +149,17 @@
 * `git commit --amend` commit the change for the target commit
 * `git mergetool` deal the conflict
 * `git rebase --continue` finish
+
+### skill-11
+**放弃修改(整个工作区或缓存区)**  
+**修改提交(已经提交的历史)**  
+有的时候修改了很多文件，想丢弃掉，使用`git reset`比`git restore`更好  
+或有的时候希望修改已经提交的历史记录
+* **`git reset`命令执行的三个基本步骤**
+    * 第一步，移动HEAD
+        * `git reset --soft HEAD~`(HEAD的父节点)，将该分支的HEAD指针指向上一个提交, 使用`--soft`参数不会改变索引和工作目录, 这时可以修改并重新提交。
+    * 第二步，更新索引
+        * `git reset --mixed HEAD~`, 如果使用了`--mixed`参数，这也是`git reset HEAD~`的默认行为，接下来会用HEAD指向的当前快照的内容来更新索引，这时只有工作区的内容是不变的，也可以修改重新提交, 这相当于回滚到了所有`git add`和`git commit`的命令执行之前。
+    * 第三步，更新工作目录
+        * `git reset --hard HEAD~`, 如果使用了`--hard`参数，则在最后将索引的内容更新到工作目录, 所以这也是最危险的一个命令
+    
