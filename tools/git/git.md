@@ -26,8 +26,11 @@
 > 注意：--left-right 用于指示log属于哪个分支，一般配合`branchA...branchB`, 上面基于同一个分支的commit区间使用没有意义
 
 ### skill-2
-**主题分支合入master分支需要引入的工作（指定具体文件）**
-* `git diff master...contrib -- app/src/git.md`
+**合并的一般流程**
+* `git merge-base master contrib` 查看两个分支的父节点
+* `git log --oneline` && `git rebase -i HEAD~x` 知道了父节点，接下来可以整理提交历史，然后再合并
+* `git diff master...contrib (-- app/src/git.md)` 查看主题分支合入master分支需要引入的工作（指定具体文件）
+* `git checkout master` && `git merge contrib` 最后合并
 
 ### skill-3
 **git + vim 统计提交区间内修改的文件列表**
