@@ -81,3 +81,50 @@
         * `cfdo %s//ConnectToDeliverySink/g`
     * 保存
         * `cfdo update`
+
+### skill-5
+**对同一个文件的多个匹配行执行一个操作, 这在执行一个按固定模式进行替换
+但内容又不完全相同的操作时非常有用, 如下替换：**
+```
+    vps.vps_video_parameter_set_id = bitStream.ReadBits(4);
+    ...
+    vps.vps_base_layer_internal_flag = bitStream.ReadBits(1);
+    ...
+    vps.vps_base_layer_available_flag = bitStream.ReadBits(1);
+```
+```
+    READ_BITS(bitStream, 4, vps.vps_video_parameter_set_id);
+    ...
+    READ_BITS(bitStream, 1, vps.vps_base_layer_internal_flag);
+    ...
+    READ_BITS(bitStream, 1, vps.vps_base_layer_available_flag);
+```
+* 使用串行宏
+    * 构建查找模式
+        * `/\VbitStream.ReadBits`
+    * 录制宏, 注意后面的`n`跳转到下一个匹配
+        * `0wyt ct(READ_BITS^[<80><fd>alabitStream, ^[wa, ^R0^[<80><fd>an`
+    * 先跳转到第一个匹配
+    * 执行1000次宏, 次数大于匹配次数即可
+        * `1000@q` 或 `:normal 1000@q`
+* 使用`global`命令
+    * 构建查找模式
+        * `/\VbitStream.ReadBits`
+    * 录制宏
+        * `0wyt ct(READ_BITS^[wabitStream, ^[la, ^R0^[<80><fd>a`
+    * 先执行`global`命令打印(缺省命令默认为`print/p`), 检查所有匹配项是否符合格式要求
+        * `:global//` 等同于 `:global//p`
+    * 执行`global`命令运行宏
+        * `:global//normal @q`
+* 使用`quickfix window`
+    * 构建查找模式
+        * `/\VbitStream.ReadBits`
+    * 录制宏
+        * `0wyt ct(READ_BITS^[wabitStream, ^[la, ^R0^[<80><fd>a`
+    * 使用`grep`命令过滤, 并在打开`quickfix window`检查所有匹配项是否符合格式要求
+        * `vimgrep // %`
+        * `:copen`
+    * 在每个匹配行上执行宏
+        * `:cdo normal @q`
+> (1) `global`命令和`quickfix window`更好，他们可以并行执行宏，并且可以很容易查看所有匹配项  
+  (2) 如果需要在多个文件中执行相同的修改，参考[skill-4](#skill-4)
